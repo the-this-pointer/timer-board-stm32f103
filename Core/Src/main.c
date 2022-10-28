@@ -413,13 +413,15 @@ void StartInputTask(void const * argument)
 void StartUiTask(void const * argument)
 {
   /* USER CODE BEGIN StartUiTask */
-	UiMenuPtr menus = NULL;
-	UIMenus_Init(&menus);
+	UiHandle uih;
+	UserInterface_Init();
+	UserInterface_InitPages(&uih);
+	
   /* Infinite loop */
 	for(;;)
   {
-		UIMenu_HandleInput(&menus);
-    osDelay(1000);
+		UserInterface_HandleInput(&uih);
+    osDelay(100);
   }
   /* USER CODE END StartUiTask */
 }
