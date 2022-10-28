@@ -3,7 +3,7 @@
 
 extern I2C_HandleTypeDef hi2c1;
 
-const char* g_menuActionIcons = "! \"#";
+const char* g_menuActionIcons = "%#!$";
 UiMenuPtr g_currentMenu;
 
 void waitReleaseAllKeys()
@@ -37,12 +37,24 @@ void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
 		ssd1306_WriteString(uih->currentPage->text, Font_11x18, White);
 		UserInterface_p_DrawActions(uih->currentPage->actionIcons);
 	}
-	else if (uih->currentPage->menu)
+	
+	if (uih->currentPage->menu)
 	{
-		g_currentMenu = uih->currentPage->menu;
+		if (uih->currentPage->text)	//show the text for 1 second and enter the menu
+		{
+			ssd1306_UpdateScreen(&hi2c1);
+			osDelay(1000);
+			ssd1306_Fill(Black);
+		}
+		
+		uih->currentMenu = uih->currentPage->menu;
 		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString(g_currentMenu->caption, Font_11x18, White);
+		ssd1306_WriteString(uih->currentMenu->caption, Font_11x18, White);
 		UserInterface_p_DrawActions(g_menuActionIcons);
+	}
+	else
+	{
+		uih->currentMenu = NULL;
 	}
 	
 	ssd1306_UpdateScreen(&hi2c1);
@@ -87,52 +99,76 @@ void UserInterface_HandleInput(UiHandle* uih)
 	waitReleaseAllKeys();
 }
 
+void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* children, menuCallback callback)
+{
+	if (!menu)
+		return;
+	
+	(menu)->caption = caption;
+	(menu)->prev = prev;
+	(menu)->next = next;
+	(menu)->parent = parent;
+	(menu)->parentPage = parentPage;
+	(menu)->children = children;
+	(menu)->callback = callback;
+}
+
+void UserInterface_p_DrawMenu(UiHandle* uih)
+{
+	if (!uih->currentMenu)
+		return;
+  ssd1306_Fill(Black);
+	ssd1306_SetCursor(5, 5);
+	ssd1306_WriteString(uih->currentMenu->caption, Font_11x18, White);
+	UserInterface_p_DrawActions(g_menuActionIcons);
+	ssd1306_UpdateScreen(&hi2c1);
+}
+
 void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action)
 {
 	switch(action)
 	{
 		case Key1:
-			if (g_currentMenu->prev != NULL)
-				g_currentMenu = g_currentMenu->prev;
+			if (uih->currentMenu->parent != NULL)
+				uih->currentMenu = uih->currentMenu->parent;
+			else if (uih->currentMenu->parentPage)
+				((UiPagePtr)uih->currentMenu->parentPage)->onHandleInput(uih, Key1);
 			break;
 		case Key2:
-			if (g_currentMenu->parent != NULL)
-				g_currentMenu = g_currentMenu->parent;
+			if (uih->currentMenu->prev != NULL)
+				uih->currentMenu = uih->currentMenu->prev;
 			break;
 		case Key3:
 		{
-			if (g_currentMenu->callback != NULL)
+			if (uih->currentMenu->callback != NULL)
 			{
 				ssd1306_Fill(Black);
 				ssd1306_SetCursor(5, 5);
-				ssd1306_WriteString("Executing...", Icon_11x18, White);
+				ssd1306_WriteString("Executing...", Font_11x18, White);
 				ssd1306_UpdateScreen(&hi2c1);
 				osDelay(500);
 
-				g_currentMenu->callback();
+				uih->currentMenu->callback();
 				
 				ssd1306_Fill(Black);
 				ssd1306_SetCursor(5, 5);
-				ssd1306_WriteString("Done", Icon_11x18, White);
+				ssd1306_WriteString("Done", Font_11x18, White);
 				ssd1306_UpdateScreen(&hi2c1);
 				osDelay(1000);
 			}
-			else if (g_currentMenu->children != NULL)
+			else if (uih->currentMenu->children != NULL)
 			{
-				g_currentMenu = g_currentMenu->children;
+				uih->currentMenu = uih->currentMenu->children;
 			}
 			break;
 		}
 		case Key4:
-			if (g_currentMenu->next != NULL)
-				g_currentMenu = g_currentMenu->next;
+			if (uih->currentMenu->next != NULL)
+				uih->currentMenu = uih->currentMenu->next;
 			break;
 	}
 	
-	ssd1306_Fill(Black);
-	ssd1306_SetCursor(5, 5);
-	ssd1306_WriteString(g_currentMenu->caption, Icon_11x18, White);
-	ssd1306_UpdateScreen(&hi2c1);
+	UserInterface_p_DrawMenu(uih);
 }
 
 void UserInterface_p_DrawActions(const char* actions)
@@ -163,24 +199,28 @@ void UserInterface_InitPages(UiHandle* uih)
 	if (!uih->pages)
 		return;
 	
+	// Create Main Page
 	uih->pages[MainPageIdx].text = "Welcome!";
 	uih->pages[MainPageIdx].actionIcons = NULL;
 	uih->pages[MainPageIdx].onInit = NULL;
 	uih->pages[MainPageIdx].onLeave = NULL;
 	uih->pages[MainPageIdx].onHandleInput = mainPageInputCallback;
-		
-	uih->pages[Page1Idx].text = "Page1";
-	uih->pages[Page1Idx].actionIcons = "!!!!";
-	uih->pages[Page1Idx].onInit = NULL;
-	uih->pages[Page1Idx].onLeave = NULL;
-	uih->pages[Page1Idx].onHandleInput = mainPageInputCallback;
-	
-	uih->pages[Page2Idx].text = "Page2";
-	uih->pages[Page2Idx].actionIcons = "!!!!";
-	uih->pages[Page2Idx].onInit = NULL;
-	uih->pages[Page2Idx].onLeave = NULL;
-	uih->pages[Page2Idx].onHandleInput = mainPageInputCallback;
 
+	// Create Settings Page And Menus
+	
+	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * 2);
+	if (!settingMenus)
+		return;
+	UserInterface_InitMenu(&settingMenus[0], "Time", 					NULL, &settingMenus[1], NULL, &uih->pages[SettingPageIdx], NULL, setTimeMenuCallback);
+	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, NULL, &uih->pages[SettingPageIdx], NULL, setSleepTimeMenuCallback);
+	
+	uih->pages[SettingPageIdx].text = "Settings";
+	uih->pages[SettingPageIdx].menu = settingMenus;
+	uih->pages[SettingPageIdx].actionIcons = NULL;
+	uih->pages[SettingPageIdx].onInit = NULL;
+	uih->pages[SettingPageIdx].onLeave = NULL;
+	uih->pages[SettingPageIdx].onHandleInput = settingsPageInputCallback;
+	
 	UserInterface_ChangePage(uih, &uih->pages[MainPageIdx]);
 }
 
@@ -189,133 +229,35 @@ void mainPageInputCallback(void* uih, enum ActionType action)
 	switch(action)
 	{
 		case Key1:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[Page1Idx]);
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
 		case Key2:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[Page2Idx]);
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
 		case Key3:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[Page1Idx]);
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
 		case Key4:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[Page2Idx]);
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-void UIMenus_Init(UiMenuPtr* menuList)
+void settingsPageInputCallback(void* uih, enum ActionType action)
 {
-	
-	// Main Menu
-	UiMenuPtr menus = (UiMenuPtr)malloc(sizeof(UiMenu) * 3);
-	if (!menus)
-		return;
-	menuList = &menus;
-	
-	// Settings Menu
-	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * 2);
-	if (!settingMenus)
-		return;
-	UIMenu_Init(&settingMenus[0], "Time", 					NULL, &settingMenus[1], &menus[0], NULL, setTime);
-	UIMenu_Init(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, &menus[0], NULL, setSleepTime);
-	// Settings Menu End
-	
-	UIMenu_Init(&menus[0], "!\"#", 		NULL, &menus[1], NULL, NULL, NULL); // !\"#$%&
-	UIMenu_Init(&menus[1], "Settings", 		&menus[0], &menus[2], NULL, settingMenus, NULL);
-	UIMenu_Init(&menus[2], "Set Output", 	&menus[1], &menus[3], NULL, NULL, setOutput);
-	UIMenu_Init(&menus[3], "Exit", 				&menus[2], NULL, NULL, NULL, exitFromMenu);
-	
-	g_currentMenu = &menus[0];
-	UIMenu_Draw();
-}
-
-void UIMenu_Init(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* children, menuCallback callback)
-{
-	if (!menu)
-		return;
-	
-	(menu)->caption = caption;
-	(menu)->prev = prev;
-	(menu)->next = next;
-	(menu)->parent = parent;
-	(menu)->children = children;
-	(menu)->callback = callback;
-}
-
-void UIMenu_HandleInput(UiMenuPtr* menus)
-{
-	if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
-		// prev
-		if (g_currentMenu->prev != NULL)
-		{
-			g_currentMenu = g_currentMenu->prev;
-		}
-	}
-	if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
-		// back
-		if (g_currentMenu->parent != NULL)
-		{
-			g_currentMenu = g_currentMenu->parent;
-		}
-	}
-	if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
-		// set
-		if (g_currentMenu->callback != NULL)
-		{
-			g_currentMenu->callback();
-			
-			while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET);
-			while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_RESET);
-		}
-		else if (g_currentMenu->children != NULL)
-		{
-			g_currentMenu = g_currentMenu->children;
-		}
-	}
-	if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
-		// next
-		if (g_currentMenu->next != NULL)
-		{
-			g_currentMenu = g_currentMenu->next;
-		}
-	}
-	
-	UIMenu_Draw();
-	waitReleaseAllKeys();
-}
-
-void UIMenu_Draw()
-{
-	if (g_currentMenu == NULL)
+	switch(action)
 	{
-		ssd1306_Fill(Black);
-		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString("<NULL>", Font_11x18, White);
-		ssd1306_UpdateScreen(&hi2c1);
-
-		return;
+		case Key1:
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx]);
+			break;
+		default:
+			break;
 	}
-    ssd1306_Fill(Black);
-		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString(g_currentMenu->caption, Icon_11x18, White);
-		ssd1306_UpdateScreen(&hi2c1);
 }
 
-// Callback functions
-
-void setTime()
+void setTimeMenuCallback()
 {
-	while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET);
+	/*while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET);
 
 	char time[6] = "00:00";
 	char charPtr = 0;
@@ -368,16 +310,103 @@ void setTime()
 		ssd1306_SetCursor(5, 5);
 		ssd1306_WriteString("Confirmed", Font_11x18, White);
 		ssd1306_UpdateScreen(&hi2c1);
-
+*/
+	  ssd1306_Fill(Black);
+		ssd1306_SetCursor(5, 5);
+		ssd1306_WriteString("0", Font_11x18, White);
+		ssd1306_UpdateScreen(&hi2c1);
+		osDelay(1000);
 }
 
-void setSleepTime()
+void setSleepTimeMenuCallback()
 {
 	  ssd1306_Fill(Black);
 		ssd1306_SetCursor(5, 5);
 		ssd1306_WriteString("00", Font_11x18, White);
 		ssd1306_UpdateScreen(&hi2c1);
+		osDelay(1000);
 }
+
+
+
+
+
+
+
+
+
+
+
+void UIMenus_Init(UiMenuPtr* menuList)
+{
+	
+	// Main Menu
+	UiMenuPtr menus = (UiMenuPtr)malloc(sizeof(UiMenu) * 3);
+	if (!menus)
+		return;
+	menuList = &menus;
+	
+	// Settings Menu
+	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * 2);
+	if (!settingMenus)
+		return;
+	UserInterface_InitMenu(&settingMenus[0], "Time", 					NULL, &settingMenus[1], &menus[0], NULL, setTimeMenuCallback);
+	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, &menus[0], NULL, setSleepTimeMenuCallback);
+	// Settings Menu End
+	
+	UserInterface_InitMenu(&menus[0], "!\"#", 		NULL, &menus[1], NULL, NULL, NULL); // !\"#$%&
+	UserInterface_InitMenu(&menus[1], "Settings", 		&menus[0], &menus[2], NULL, settingMenus, NULL);
+	UserInterface_InitMenu(&menus[2], "Set Output", 	&menus[1], &menus[3], NULL, NULL, setOutput);
+	UserInterface_InitMenu(&menus[3], "Exit", 				&menus[2], NULL, NULL, NULL, exitFromMenu);
+	
+	g_currentMenu = &menus[0];
+	// UIMenu_Draw();
+}
+
+void UIMenu_HandleInput(UiMenuPtr* menus)
+{
+	if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
+		// prev
+		if (g_currentMenu->prev != NULL)
+		{
+			g_currentMenu = g_currentMenu->prev;
+		}
+	}
+	if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
+		// back
+		if (g_currentMenu->parent != NULL)
+		{
+			g_currentMenu = g_currentMenu->parent;
+		}
+	}
+	if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
+		// set
+		if (g_currentMenu->callback != NULL)
+		{
+			g_currentMenu->callback();
+			
+			while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET);
+			while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_RESET);
+		}
+		else if (g_currentMenu->children != NULL)
+		{
+			g_currentMenu = g_currentMenu->children;
+		}
+	}
+	if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
+		// next
+		if (g_currentMenu->next != NULL)
+		{
+			g_currentMenu = g_currentMenu->next;
+		}
+	}
+	
+	// UIMenu_Draw();
+	waitReleaseAllKeys();
+}
+
+
+// Callback functions
 
 void setOutput()
 {

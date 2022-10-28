@@ -20,6 +20,8 @@ typedef struct {
 	void* parent;
 	void* children;
 	
+	void* parentPage;
+	
 	menuCallback callback;
 } UiMenu, *UiMenuPtr;
 
@@ -36,33 +38,36 @@ typedef struct {
 typedef struct {
 	UiPagePtr pages;
 	UiPagePtr currentPage;
+	UiMenuPtr currentMenu;
 } UiHandle;
 
 void UserInterface_Init();
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page);
 void UserInterface_HandleInput(UiHandle* uih);
+void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* children, menuCallback callback);
 
+void UserInterface_p_DrawMenu(UiHandle* uih);
 void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action);
 void UserInterface_p_DrawActions(const char* actions);
 
 
 // Ui Callbacks
-enum Pages {MainPageIdx, Page1Idx, Page2Idx, MaxPages};
+enum Pages {MainPageIdx, SettingPageIdx, MaxPages};
 
 void UserInterface_InitPages(UiHandle* uih);
 void mainPageInputCallback(void* uih, enum ActionType action);
+void settingsPageInputCallback(void* uih, enum ActionType action);
+void setTimeMenuCallback();
+void setSleepTimeMenuCallback();
 
 
 
 void UIMenus_Init(UiMenuPtr* menus);
 void UIMenu_Init(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* children, menuCallback callback);
 void UIMenu_HandleInput(UiMenuPtr* menus);
-void UIMenu_Draw();
 
 // Callback functions
 
-void setTime();
-void setSleepTime();
 void setOutput();
 void exitFromMenu();
 
