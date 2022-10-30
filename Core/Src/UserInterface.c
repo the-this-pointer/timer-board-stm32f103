@@ -200,7 +200,7 @@ void UserInterface_InitPages(UiHandle* uih)
 		return;
 	
 	// Create Main Page
-	uih->pages[MainPageIdx].text = "Welcome!";
+	uih->pages[MainPageIdx].text = "Main Page";
 	uih->pages[MainPageIdx].actionIcons = NULL;
 	uih->pages[MainPageIdx].onInit = NULL;
 	uih->pages[MainPageIdx].onLeave = NULL;
