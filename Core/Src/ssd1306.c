@@ -166,7 +166,7 @@ char ssd1306_WriteChar(char ch, FontDef Font, SSD1306_COLOR color)
     // Translate font to screenbuffer
     for (i = 0; i < Font.FontHeight; i++)
     {
-        b = Font.data[(ch - 32) * Font.FontHeight + i];
+        b = Font.data[(ch - Font.FontOffset) * Font.FontHeight + i];
         for (j = 0; j < Font.FontWidth; j++)
         {
             if ((b << j) & 0x8000)

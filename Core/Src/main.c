@@ -108,7 +108,7 @@ int main(void)
   MX_RTC_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+	HAL_Delay(3000);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -414,14 +414,21 @@ void StartUiTask(void const * argument)
 {
   /* USER CODE BEGIN StartUiTask */
 	UiHandle uih;
-	UserInterface_Init();
+	UserInterface_Init(&uih);
 	UserInterface_InitPages(&uih);
 	
   /* Infinite loop */
+	TickType_t xLastWakeTime = xTaskGetTickCount();
 	for(;;)
   {
 		UserInterface_HandleInput(&uih);
-    osDelay(100);
+		TickType_t xAfterInput = xTaskGetTickCount();
+		
+		if (UserInterface_Update(&uih, xAfterInput - xLastWakeTime))
+			xLastWakeTime = xTaskGetTickCount();
+		
+		UserInterface_Flush(&uih);
+    vTaskDelay( pdMS_TO_TICKS( 50 ) );
   }
   /* USER CODE END StartUiTask */
 }
