@@ -11,18 +11,13 @@ extern RTC_HandleTypeDef hrtc;
 
 const char* g_menuActionIcons = "%#!$";
 
-void waitReleaseAllKeys()
-{
-	while (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET);
-	while (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET);
-	while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET);
-	while (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET);
-}
-
 void UserInterface_Init(UiHandle* uih)
 {
 	ssd1306_Init(&hi2c1);
+	uih->currentPage = NULL;
+	uih->currentMenu = NULL;
 	uih->screenDirty = 0;
+	uih->screenStatus = 1;
 }
 
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
@@ -70,43 +65,41 @@ void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
 	SCR_DIRTY;
 }
 
-void UserInterface_HandleInput(UiHandle* uih)
+void UserInterface_HandleInput(UiHandle* uih, uint16_t input)
 {
 	if (!uih->currentPage)
 		return;
 
 	if (uih->currentPage->menu == NULL)
 	{
-		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
+		if (input == Key1_Pin) {
 			uih->currentPage->onHandleInput(uih, Key1);
 		}
-		if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
+		if (input == Key2_Pin) {
 			uih->currentPage->onHandleInput(uih, Key2);
 		}
-		if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
+		if (input == Key3_Pin) {
 			uih->currentPage->onHandleInput(uih, Key3);
 		}
-		if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
+		if (input == Key4_Pin) {
 			uih->currentPage->onHandleInput(uih, Key4);
 		}
 	}
 	else
 	{
-		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
+		if (input == Key1_Pin) {
 			UserInterface_p_onHandleMenuInput(uih, Key1);
 		}
-		if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
+		if (input == Key2_Pin) {
 			UserInterface_p_onHandleMenuInput(uih, Key2);
 		}
-		if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
+		if (input == Key3_Pin) {
 			UserInterface_p_onHandleMenuInput(uih, Key3);
 		}
-		if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
+		if (input == Key4_Pin) {
 			UserInterface_p_onHandleMenuInput(uih, Key4);
 		}
 	}
-
-	waitReleaseAllKeys();
 }
 
 void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* children, menuCallback callback)
@@ -125,7 +118,7 @@ void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, voi
 
 uint8_t UserInterface_Update(UiHandle* uih, uint32_t since)
 {
-	if (uih->currentPage && uih->currentPage->onUpdate)
+	if (uih->currentPage && uih->currentPage->onUpdate && uih->screenStatus)
 	{
 		return uih->currentPage->onUpdate(uih, since);
 	}
@@ -135,11 +128,30 @@ uint8_t UserInterface_Update(UiHandle* uih, uint32_t since)
 
 void UserInterface_Flush(UiHandle* uih)
 {
-	if (!uih->screenDirty)
+	if (!uih->screenDirty || !uih->screenStatus)
 		return;
 	
 	ssd1306_UpdateScreen(&hi2c1);
 	SCR_DIRTY_CLR;
+}
+
+void UserInterface_TurnOnScreen(UiHandle* uih)
+{
+	uih->screenStatus = 1;
+}
+
+void UserInterface_TurnOffScreen(UiHandle* uih)
+{
+	uih->screenStatus = 0;
+	
+	ssd1306_Fill(Black);
+	ssd1306_UpdateScreen(&hi2c1);
+	SCR_DIRTY_CLR;
+}
+
+uint8_t UserInterface_ScreenIsOn(UiHandle* uih)
+{
+	return uih->screenStatus;
 }
 
 void UserInterface_p_DrawMenu(UiHandle* uih)
@@ -255,6 +267,7 @@ void UserInterface_InitPages(UiHandle* uih)
 	UserInterface_ChangePage(uih, &uih->pages[MainPageIdx]);
 }
 
+// TODO change the location of these two methods
 uint8_t DecodeBCD(uint8_t bin) {
 	return (((bin & 0xf0) >> 4) * 10) + (bin & 0x0f);
 }

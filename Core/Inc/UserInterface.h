@@ -41,15 +41,20 @@ typedef struct {
 	UiPagePtr pages;
 	UiPagePtr currentPage;
 	UiMenuPtr currentMenu;
-	char screenDirty;
+	uint8_t screenDirty;
+	uint8_t screenStatus;
 } UiHandle;
 
 void UserInterface_Init(UiHandle* uih);
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page);
-void UserInterface_HandleInput(UiHandle* uih);
+void UserInterface_HandleInput(UiHandle* uih, uint16_t input);
 void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* children, menuCallback callback);
 uint8_t UserInterface_Update(UiHandle* uih, uint32_t since);
 void UserInterface_Flush(UiHandle* uih);
+
+void UserInterface_TurnOnScreen(UiHandle* uih);
+void UserInterface_TurnOffScreen(UiHandle* uih);
+uint8_t UserInterface_ScreenIsOn(UiHandle* uih);
 
 void UserInterface_p_DrawMenu(UiHandle* uih);
 void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action);

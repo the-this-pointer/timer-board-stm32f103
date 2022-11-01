@@ -53,8 +53,8 @@ osThreadId uiTaskHandle;
 osThreadId timerTaskHandle;
 osMessageQId inputQueueHandle;
 osTimerId sleepTimerHandle;
-osMutexId inputMutexHandle;
 /* USER CODE BEGIN PV */
+UiHandle uih;
 
 /* USER CODE END PV */
 
@@ -112,12 +112,9 @@ int main(void)
   MX_RTC_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+	UserInterface_Init(&uih);
+	UserInterface_InitPages(&uih);
   /* USER CODE END 2 */
-
-  /* Create the mutex(es) */
-  /* definition and creation of inputMutex */
-  osMutexDef(inputMutex);
-  inputMutexHandle = osMutexCreate(osMutex(inputMutex));
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -133,6 +130,8 @@ int main(void)
   sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
 
   /* USER CODE BEGIN RTOS_TIMERS */
+	xTimerChangePeriod(sleepTimerHandle, 10000 / portTICK_PERIOD_MS, 100);
+	xTimerStart(sleepTimerHandle, 100);
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
@@ -410,7 +409,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartInputTask */
@@ -424,9 +422,50 @@ void StartInputTask(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
+	BaseType_t xResult;
+	uint16_t counter = 0;
+	uint16_t value = 0;
+	uint8_t dataAvailable = 0;
   for(;;)
   {
-    osDelay(1000);
+		if (counter > 30)
+			counter = 30;
+		
+		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
+			value = Key1_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
+			value = Key2_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
+			value = Key3_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
+			value = Key4_Pin;
+			dataAvailable = 1;
+		}
+		else if (counter > 0) {
+			counter = 0;
+			xTimerReset(sleepTimerHandle, 100);
+		}
+		
+		if (dataAvailable)
+		{
+			if (!UserInterface_ScreenIsOn(&uih))
+				UserInterface_TurnOnScreen(&uih);
+			else
+			{
+				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
+				counter++;
+			}
+			dataAvailable = 0;
+			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
+		}
+
+    osDelay( 100 );
   }
   /* USER CODE END 5 */
 }
@@ -441,22 +480,25 @@ void StartInputTask(void const * argument)
 void StartUiTask(void const * argument)
 {
   /* USER CODE BEGIN StartUiTask */
-	UiHandle uih;
-	UserInterface_Init(&uih);
-	UserInterface_InitPages(&uih);
-	
   /* Infinite loop */
-	TickType_t xLastWakeTime = xTaskGetTickCount();
+	TickType_t xLastUpdateTime = xTaskGetTickCount();
+	TickType_t xNow = xTaskGetTickCount();
+	uint16_t xReceivedInput;
+	BaseType_t xResult;
 	for(;;)
   {
-		UserInterface_HandleInput(&uih);
-		TickType_t xAfterInput = xTaskGetTickCount();
+    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(50) );
+		if( xResult == pdPASS )
+		{
+			UserInterface_HandleInput(&uih, xReceivedInput);
+		}
+		xNow = xTaskGetTickCount();
 		
-		if (UserInterface_Update(&uih, xAfterInput - xLastWakeTime))
-			xLastWakeTime = xTaskGetTickCount();
+		if (UserInterface_Update(&uih, xNow - xLastUpdateTime))
+			xLastUpdateTime = xTaskGetTickCount();
 		
 		UserInterface_Flush(&uih);
-    vTaskDelay( pdMS_TO_TICKS( 50 ) );
+    osDelay( 100 );
   }
   /* USER CODE END StartUiTask */
 }
@@ -474,7 +516,7 @@ void StartTimerTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1000);
+    osDelay( 1000 );
   }
   /* USER CODE END StartTimerTask */
 }
@@ -483,9 +525,21 @@ void StartTimerTask(void const * argument)
 void SleepTimerCallback(void const * argument)
 {
   /* USER CODE BEGIN SleepTimerCallback */
-
+	UserInterface_TurnOffScreen(&uih);
   /* USER CODE END SleepTimerCallback */
 }
+
+/* USER CODE BEGIN PreSleepProcessing */
+
+void PreSleepProcessing(uint32_t *ulExpectedIdleTime)
+{
+}
+
+void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
+{
+}
+
+/* USER CODE END PostSleepProcessing */
 
 /**
   * @brief  Period elapsed callback in non blocking mode
