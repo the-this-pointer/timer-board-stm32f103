@@ -282,8 +282,6 @@ uint8_t mainPageUpdateCallback(void* uih, uint32_t since)
 		Error_Handler();
 	}
 	
-	
-	
 	static int counter;
 	counter++;
 	char timeBuff[8] = {0};
@@ -305,6 +303,9 @@ uint8_t mainPageUpdateCallback(void* uih, uint32_t since)
 	ssd1306_SetCursor(36, 35);
 	ssd1306_WriteString(dateBuff, Font_11x18, White);
 
+	ssd1306_SetCursor(5, 40);
+	ssd1306_WriteChar('&', Icon_11x18, White);
+	
 	SCR_DIRTY_ARG(hnd);
 	return 1;
 }
@@ -316,14 +317,7 @@ void mainPageInputCallback(void* uih, enum ActionType action)
 		case Key1:
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
-		case Key2:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
-			break;
-		case Key3:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
-			break;
-		case Key4:
-			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+		default:
 			break;
 	}
 }

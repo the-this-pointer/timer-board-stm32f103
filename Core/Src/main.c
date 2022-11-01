@@ -98,7 +98,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+	HAL_Delay(3000);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -108,7 +108,6 @@ int main(void)
   MX_RTC_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-	HAL_Delay(3000);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
