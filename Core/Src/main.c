@@ -51,6 +51,9 @@ UART_HandleTypeDef huart1;
 osThreadId inputTaskHandle;
 osThreadId uiTaskHandle;
 osThreadId timerTaskHandle;
+osMessageQId inputQueueHandle;
+osTimerId sleepTimerHandle;
+osMutexId inputMutexHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -65,6 +68,7 @@ static void MX_USART1_UART_Init(void);
 void StartInputTask(void const * argument);
 void StartUiTask(void const * argument);
 void StartTimerTask(void const * argument);
+void SleepTimerCallback(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -110,6 +114,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
   /* USER CODE END 2 */
 
+  /* Create the mutex(es) */
+  /* definition and creation of inputMutex */
+  osMutexDef(inputMutex);
+  inputMutexHandle = osMutexCreate(osMutex(inputMutex));
+
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
@@ -118,9 +127,19 @@ int main(void)
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
+  /* Create the timer(s) */
+  /* definition and creation of sleepTimer */
+  osTimerDef(sleepTimer, SleepTimerCallback);
+  sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* definition and creation of inputQueue */
+  osMessageQDef(inputQueue, 16, uint16_t);
+  inputQueueHandle = osMessageCreate(osMessageQ(inputQueue), NULL);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -363,20 +382,30 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(Output_GPIO_Port, Output_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, Output4_Pin|Output3_Pin|Output2_Pin|Output1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : LED_Pin */
+  GPIO_InitStruct.Pin = LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Output4_Pin Output3_Pin Output2_Pin Output1_Pin */
+  GPIO_InitStruct.Pin = Output4_Pin|Output3_Pin|Output2_Pin|Output1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Key1_Pin Key2_Pin Key3_Pin Key4_Pin */
   GPIO_InitStruct.Pin = Key1_Pin|Key2_Pin|Key3_Pin|Key4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : Output_Pin */
-  GPIO_InitStruct.Pin = Output_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(Output_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -448,6 +477,14 @@ void StartTimerTask(void const * argument)
     osDelay(1000);
   }
   /* USER CODE END StartTimerTask */
+}
+
+/* SleepTimerCallback function */
+void SleepTimerCallback(void const * argument)
+{
+  /* USER CODE BEGIN SleepTimerCallback */
+
+  /* USER CODE END SleepTimerCallback */
 }
 
 /**
