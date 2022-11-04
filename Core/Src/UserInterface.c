@@ -1,5 +1,6 @@
 #include "UserInterface.h"
 #include "stm32f1xx_hal.h"
+#include "cmsis_os.h"
 #include <string.h>
 
 #define SCR_DIRTY_ARG(uih) uih->screenDirty = 1
@@ -8,6 +9,7 @@
 
 extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
+extern osMutexId lcdMutexHandle;
 
 const char* g_menuActionIcons = "%#!$";
 
@@ -118,35 +120,51 @@ void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, voi
 
 uint8_t UserInterface_Update(UiHandle* uih, uint32_t since)
 {
+	xSemaphoreTake(lcdMutexHandle, portMAX_DELAY);
 	if (uih->currentPage && uih->currentPage->onUpdate && uih->screenStatus)
 	{
+		xSemaphoreGive(lcdMutexHandle);
 		return uih->currentPage->onUpdate(uih, since);
 	}
+	xSemaphoreGive(lcdMutexHandle);
 	return 0;
 	// SCR_DIRTY;
 }
 
 void UserInterface_Flush(UiHandle* uih)
 {
-	if (!uih->screenDirty || !uih->screenStatus)
+	xSemaphoreTake(lcdMutexHandle, portMAX_DELAY);
+	if (!uih->screenDirty || !uih->screenStatus) {
+		xSemaphoreGive(lcdMutexHandle);
 		return;
-	
+	}
+	xSemaphoreGive(lcdMutexHandle);
+
 	ssd1306_UpdateScreen(&hi2c1);
 	SCR_DIRTY_CLR;
 }
 
 void UserInterface_TurnOnScreen(UiHandle* uih)
 {
-	uih->screenStatus = 1;
+	xSemaphoreTake(lcdMutexHandle, portMAX_DELAY);
+	if (uih->screenStatus == 0) 
+	{
+		uih->screenStatus = 1;
+		UserInterface_ChangePage(uih, &uih->pages[0]);
+	}
+	xSemaphoreGive(lcdMutexHandle);
 }
 
 void UserInterface_TurnOffScreen(UiHandle* uih)
 {
-	uih->screenStatus = 0;
-	
-	ssd1306_Fill(Black);
-	ssd1306_UpdateScreen(&hi2c1);
-	SCR_DIRTY_CLR;
+	if (uih->screenStatus == 1) 
+	{
+		uih->screenStatus = 0;
+		
+		ssd1306_Fill(Black);
+		ssd1306_UpdateScreen(&hi2c1);
+		SCR_DIRTY_CLR;
+	}
 }
 
 uint8_t UserInterface_ScreenIsOn(UiHandle* uih)

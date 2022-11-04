@@ -53,6 +53,7 @@ osThreadId uiTaskHandle;
 osThreadId timerTaskHandle;
 osMessageQId inputQueueHandle;
 osTimerId sleepTimerHandle;
+osMutexId lcdMutexHandle;
 /* USER CODE BEGIN PV */
 UiHandle uih;
 
@@ -115,6 +116,11 @@ int main(void)
 	UserInterface_Init(&uih);
 	UserInterface_InitPages(&uih);
   /* USER CODE END 2 */
+
+  /* Create the mutex(es) */
+  /* definition and creation of lcdMutex */
+  osMutexDef(lcdMutex);
+  lcdMutexHandle = osMutexCreate(osMutex(lcdMutex));
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -449,7 +455,6 @@ void StartInputTask(void const * argument)
 		}
 		else if (counter > 0) {
 			counter = 0;
-			xTimerReset(sleepTimerHandle, 100);
 		}
 		
 		if (dataAvailable)
@@ -461,6 +466,7 @@ void StartInputTask(void const * argument)
 				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
 				counter++;
 			}
+			xTimerReset(sleepTimerHandle, 100);
 			dataAvailable = 0;
 			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
 		}
@@ -528,18 +534,6 @@ void SleepTimerCallback(void const * argument)
 	UserInterface_TurnOffScreen(&uih);
   /* USER CODE END SleepTimerCallback */
 }
-
-/* USER CODE BEGIN PreSleepProcessing */
-
-void PreSleepProcessing(uint32_t *ulExpectedIdleTime)
-{
-}
-
-void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
-{
-}
-
-/* USER CODE END PostSleepProcessing */
 
 /**
   * @brief  Period elapsed callback in non blocking mode
