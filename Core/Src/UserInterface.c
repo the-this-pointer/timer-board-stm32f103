@@ -11,8 +11,19 @@ extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
 extern osMutexId lcdMutexHandle;
 extern osTimerId sleepTimerHandle;
+extern TimeList* timeList;
 
+uint8_t	g_menuActionsOffset = 0;
 const char* g_menuActionIcons = "%#$!";
+
+#define ACT_OFST(a, b) \
+	if (g_menuActionsOffset == 0) \
+	{ \
+		a; \
+	} else { \
+		b; \
+	}
+
 
 void UserInterface_Init(UiHandle* uih)
 {
@@ -29,6 +40,7 @@ void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
 		uih->currentPage->onLeave(uih);
 	
 	uih->currentPage = page;
+	g_menuActionsOffset = 0;
 	
 	if (uih->currentPage->onInit)
 		uih->currentPage->onInit(uih);
@@ -241,17 +253,26 @@ void UserInterface_p_DrawActions(const char* actions)
 	if (actions == NULL || strlen(actions) < 4)
 		return;
 	
-	ssd1306_SetCursor(5, 40);
-	ssd1306_WriteChar(actions[0], Icon_11x18, White);
-	
-	ssd1306_SetCursor(40, 40);
-	ssd1306_WriteChar(actions[1], Icon_11x18, White);
-	
-	ssd1306_SetCursor(75, 40);
-	ssd1306_WriteChar(actions[2], Icon_11x18, White);
-	
-	ssd1306_SetCursor(110, 40);
-	ssd1306_WriteChar(actions[3], Icon_11x18, White);
+	if (actions[g_menuActionsOffset+0] != ' ')
+	{
+		ssd1306_SetCursor(5, 40);
+		ssd1306_WriteChar(actions[g_menuActionsOffset+0], Icon_11x18, White);
+	}
+	if (actions[g_menuActionsOffset+1] != ' ')
+	{
+		ssd1306_SetCursor(40, 40);
+		ssd1306_WriteChar(actions[g_menuActionsOffset+1], Icon_11x18, White);
+	}
+	if (actions[g_menuActionsOffset+2] != ' ')
+	{
+		ssd1306_SetCursor(75, 40);
+		ssd1306_WriteChar(actions[g_menuActionsOffset+2], Icon_11x18, White);
+	}
+	if (actions[g_menuActionsOffset+3] != ' ')
+	{
+		ssd1306_SetCursor(110, 40);
+		ssd1306_WriteChar(actions[g_menuActionsOffset+3], Icon_11x18, White);
+	}
 }
 
 
@@ -266,12 +287,25 @@ void UserInterface_InitPages(UiHandle* uih)
 	
 	/* Init Main Page */
 	uih->pages[MainPageIdx].text = "Main Page";
-	uih->pages[MainPageIdx].actionIcons = NULL;
+	uih->pages[MainPageIdx].actionIcons = "&  )";
 	uih->pages[MainPageIdx].onInit = NULL;
 	uih->pages[MainPageIdx].onUpdate = mainPageUpdateCallback;
 	uih->pages[MainPageIdx].onLeave = NULL;
 	uih->pages[MainPageIdx].onHandleInput = mainPageInputCallback;
 	uih->pages[MainPageIdx].data = NULL;
+
+	/* Init Time List Page And Menus */
+	TimeListPageData* timeListData = malloc(sizeof(TimeListPageData));	
+	timeListData->plan = NULL;
+
+	uih->pages[TimeListPageIdx].text = "Time List";
+	uih->pages[TimeListPageIdx].menu = NULL;
+	uih->pages[TimeListPageIdx].actionIcons = "%#$**+- ";
+	uih->pages[TimeListPageIdx].onInit = timeListPageOnInitCallback;
+	uih->pages[TimeListPageIdx].onUpdate = timeListPageUpdateCallback;
+	uih->pages[TimeListPageIdx].onLeave = NULL;
+	uih->pages[TimeListPageIdx].onHandleInput = timeListPageInputCallback;
+	uih->pages[TimeListPageIdx].data = NULL;
 
 	/* Init Settings Page And Menus */
 	
@@ -400,8 +434,7 @@ uint8_t mainPageUpdateCallback(void* uih, uint32_t since)
 	ssd1306_SetCursor(36, 35);
 	ssd1306_WriteString(dateBuff, Font_11x18, White);
 
-	ssd1306_SetCursor(5, 40);
-	ssd1306_WriteChar('&', Icon_11x18, White);
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
 	
 	SCR_DIRTY_ARG(hnd);
 	return 1;
@@ -413,6 +446,89 @@ void mainPageInputCallback(void* uih, enum ActionType action)
 	{
 		case Key1:
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			break;
+		case Key4:
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+			break;
+		default:
+			break;
+	}
+}
+
+void timeListPageOnInitCallback(void* uih)
+{
+	UiHandle* hnd = uih;
+	TimeListPageData* data = hnd->currentPage->data;
+
+	data->plan = Timer_GetNextFullSlot(timeList, 0);
+}
+
+uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 400)
+		return 0;
+	UiHandle* hnd = uih;
+	TimeListPageData* data = hnd->currentPage->data;
+	
+	ssd1306_Fill(Black);
+	
+	if (data->plan == NULL)
+	{
+		ssd1306_SetCursor(5, 5);
+		ssd1306_WriteString("Empty List!", Font_11x18, White);
+	} else {
+		char buff[16] = {0};
+		snprintf(buff, 16, "%c: %d", data->plan->mode == Monthly? 'M': (data->plan->mode == Weekly? 'W': 'D'), data->plan->day);
+		
+		ssd1306_SetCursor(5, 5);
+		ssd1306_WriteString(buff, Font_11x18, White);
+	}
+	
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+
+	SCR_DIRTY_ARG(hnd);
+	return 1;
+}
+
+void timeListPageInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	TimeListPageData* data = hnd->currentPage->data;
+
+	switch(action)
+	{
+		case Key1:
+			ACT_OFST(
+							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx]), 
+		
+							g_menuActionsOffset -= 4
+			)
+			break;
+		case Key2:
+		{
+			ACT_OFST(
+							TimePlan* p = Timer_GetPrevFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
+							if(p) data->plan = p, 
+
+							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx]) /* Go to add page */
+			)
+			break;
+		}
+		case Key3:
+			ACT_OFST(
+							TimePlan* p = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
+							if(p) data->plan = p, 
+
+							Timer_RemovePlan(timeList, Timer_ToOffset(timeList, data->plan)); 
+							data->plan = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan))
+			)
+			break;
+		case Key4:
+			ACT_OFST(
+							g_menuActionsOffset += 4, 
+		
+							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx])
+			)
 			break;
 		default:
 			break;

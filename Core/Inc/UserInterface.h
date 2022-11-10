@@ -5,6 +5,7 @@
 #include "fonts.h"
 #include "main.h"
 #include "utils.h"
+#include "Timer.h"
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -66,13 +67,20 @@ void UserInterface_p_DrawActions(const char* actions);
 
 
 // Ui Callbacks
-enum Pages {MainPageIdx, SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, MaxPages};
+enum Pages {MainPageIdx, TimeListPageIdx, SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, MaxPages};
 
 void UserInterface_InitPages(UiHandle* uih);
 void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToShow, UiPagePtr fallbackPage);
 /* Main Page */
 uint8_t mainPageUpdateCallback(void* uih, uint32_t since);
 void mainPageInputCallback(void* uih, enum ActionType action);
+/* Time List */
+typedef struct time_list_data {
+	TimePlan* plan;
+} TimeListPageData;
+void timeListPageOnInitCallback(void* uih);
+uint8_t timeListPageUpdateCallback(void* uih, uint32_t since);
+void timeListPageInputCallback(void* uih, enum ActionType action);
 /* Settings */
 void settingsPageInputCallback(void* uih, enum ActionType action);
 /* Set Time */

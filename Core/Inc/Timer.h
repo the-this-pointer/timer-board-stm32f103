@@ -4,9 +4,8 @@
 #include <stdint.h>
 
 #define INVALID_SLOT			255
-#define MAX_PLANS					50
-#define MAX_TIMES					100
-#define MAX_TIMES_PER_DAY	16
+#define MAX_PLANS					3
+#define MAX_TIMES_PER_DAY	2
 
 enum TimeMode {
 	NotAssigned,
@@ -31,12 +30,13 @@ typedef struct time_list {
 	TimePlan plans[MAX_PLANS];
 } TimeList;
 
-void Timer_NewTimeList(TimeList** list);
+void Timer_TimeListInit(TimeList* list);
 uint8_t Timer_GetEmptySlot(TimeList* list);
 TimePlan* Timer_AddPlan(TimeList* list, enum TimeMode mode);
 void Timer_RemovePlan(TimeList* list, uint8_t offset);
 TimePlan* Timer_GetNextFullSlot(TimeList* list, uint8_t start);
 TimePlan* Timer_GetPrevFullSlot(TimeList* list, uint8_t start);
+uint8_t Timer_ToOffset(TimeList* list, TimePlan* plan);
 
 TimerItem* TimePlan_AddItem(TimePlan* plan);
 void TimePlan_RemoveItem(TimePlan* plan, uint8_t offset);

@@ -2,13 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-void Timer_NewTimeList(TimeList** list)
+void Timer_TimeListInit(TimeList* list)
 {
-	*list = malloc(sizeof(TimeList));
-	if ((*list) == NULL)
-		return;
-	
-	memset(*list, 0, sizeof(TimeList));
+	memset(list, 0, sizeof(TimeList));
 }
 
 uint8_t Timer_GetEmptySlot(TimeList* list)
@@ -40,7 +36,7 @@ TimePlan* Timer_AddPlan(TimeList* list, enum TimeMode mode)
 
 void Timer_RemovePlan(TimeList* list, uint8_t offset)
 {
-	if (MAX_PLANS < offset)
+	if (offset == INVALID_SLOT || MAX_PLANS < offset)
 		return;
 
 	int i;
@@ -53,6 +49,9 @@ void Timer_RemovePlan(TimeList* list, uint8_t offset)
 
 TimePlan* Timer_GetNextFullSlot(TimeList* list, uint8_t start)
 {
+	if (start == INVALID_SLOT)
+		return NULL;
+
 	uint8_t i;
 	for(i = start; i < MAX_PLANS; i++)
 	{
@@ -64,6 +63,9 @@ TimePlan* Timer_GetNextFullSlot(TimeList* list, uint8_t start)
 
 TimePlan* Timer_GetPrevFullSlot(TimeList* list, uint8_t start)
 {
+	if (start == INVALID_SLOT)
+		return NULL;
+
 	int8_t i;
 	for(i = start; i >= 0; i--)
 	{
@@ -71,6 +73,14 @@ TimePlan* Timer_GetPrevFullSlot(TimeList* list, uint8_t start)
 			return &list->plans[i];
 	}
 	return NULL;
+}
+
+uint8_t Timer_ToOffset(TimeList* list, TimePlan* plan)
+{
+	if (plan == NULL)
+		return INVALID_SLOT;
+	
+	return plan - list->plans;
 }
 
 TimerItem* TimePlan_AddItem(TimePlan* plan)
@@ -91,9 +101,9 @@ TimerItem* TimePlan_AddItem(TimePlan* plan)
 
 void TimePlan_RemoveItem(TimePlan* plan, uint8_t offset)
 {
-	if (MAX_TIMES_PER_DAY < offset || plan->items[offset] == NULL)
+	if (offset == INVALID_SLOT || MAX_TIMES_PER_DAY < offset || plan->items[offset] == NULL)
 		return;
-	
+
 	free(plan->items[offset]);
 	plan->items[offset] = NULL;
 }
@@ -111,6 +121,9 @@ uint8_t TimePlan_GetEmptySlot(TimePlan* plan)
 
 TimerItem* TimePlan_GetNextFullSlot(TimePlan* plan, uint8_t start)
 {
+	if (start == INVALID_SLOT)
+		return NULL;
+
 	uint8_t i;
 	for(i = start; i < MAX_TIMES_PER_DAY; i++)
 	{
@@ -122,6 +135,9 @@ TimerItem* TimePlan_GetNextFullSlot(TimePlan* plan, uint8_t start)
 
 TimerItem* TimePlan_GetPrevFullSlot(TimePlan* plan, uint8_t start)
 {
+	if (start == INVALID_SLOT)
+		return NULL;
+
 	int8_t i;
 	for(i = start; i >= 0; i--)
 	{

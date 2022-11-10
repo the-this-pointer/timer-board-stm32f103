@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "UserInterface.h"
+#include "Timer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,7 +57,7 @@ osTimerId sleepTimerHandle;
 osMutexId lcdMutexHandle;
 /* USER CODE BEGIN PV */
 UiHandle uih;
-
+TimeList timeList;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -115,6 +116,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	UserInterface_Init(&uih);
 	UserInterface_InitPages(&uih);
+	
+	Timer_TimeListInit(&timeList);
   /* USER CODE END 2 */
 
   /* Create the mutex(es) */
