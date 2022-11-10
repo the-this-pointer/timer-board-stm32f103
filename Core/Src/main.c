@@ -434,8 +434,8 @@ void StartInputTask(void const * argument)
 	uint8_t dataAvailable = 0;
   for(;;)
   {
-		if (counter > 30)
-			counter = 30;
+		if (counter > 35)
+			counter = 35;
 		
 		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
 			value = Key1_Pin;
@@ -464,7 +464,7 @@ void StartInputTask(void const * argument)
 			else
 			{
 				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
-				counter++;
+				counter += 5;
 			}
 			xTimerReset(sleepTimerHandle, 100);
 			dataAvailable = 0;

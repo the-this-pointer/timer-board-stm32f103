@@ -66,7 +66,7 @@ void UserInterface_p_DrawActions(const char* actions);
 
 
 // Ui Callbacks
-enum Pages {MainPageIdx, SettingPageIdx, SetTimePageIdx, MessagePopupIdx, MaxPages};
+enum Pages {MainPageIdx, SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, MaxPages};
 
 void UserInterface_InitPages(UiHandle* uih);
 void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToShow, UiPagePtr fallbackPage);
@@ -86,6 +86,13 @@ typedef struct set_time_data {
 void setTimePageOnInitCallback(void* uih);
 uint8_t setTimePageUpdateCallback(void* uih, uint32_t since);
 void setTimePageInputCallback(void* uih, enum ActionType action);
+/* Set Sleep Time */
+typedef struct set_sleep_time_data {
+	uint8_t sleepTime;
+} SetSleepTimePageData;
+void setSleepTimePageOnInitCallback(void* uih);
+uint8_t setSleepTimePageUpdateCallback(void* uih, uint32_t since);
+void setSleepTimePageInputCallback(void* uih, enum ActionType action);
 /* Message Popup */
 typedef struct message_popup_data {
 	uint8_t secondsToShow;
@@ -95,9 +102,5 @@ typedef struct message_popup_data {
 void messagePopupOnInitCallback(void* uih);
 uint8_t messagePopupUpdateCallback(void* uih, uint32_t since);
 void messagePopupInputCallback(void* uih, enum ActionType action);
-
-
-void setSleepTimeMenuCallback();
-
 
 #endif	// USERINTERFACE_H

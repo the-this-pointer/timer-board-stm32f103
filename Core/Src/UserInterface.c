@@ -10,8 +10,9 @@
 extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
 extern osMutexId lcdMutexHandle;
+extern osTimerId sleepTimerHandle;
 
-const char* g_menuActionIcons = "%#!$";
+const char* g_menuActionIcons = "%#$!";
 
 void UserInterface_Init(UiHandle* uih)
 {
@@ -199,6 +200,10 @@ void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action)
 				uih->currentMenu = uih->currentMenu->prev;
 			break;
 		case Key3:
+			if (uih->currentMenu->next != NULL)
+				uih->currentMenu = uih->currentMenu->next;
+			break;
+		case Key4:
 		{
 			if (uih->currentMenu->callback != NULL)
 			{
@@ -226,10 +231,6 @@ void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action)
 			}
 			break;
 		}
-		case Key4:
-			if (uih->currentMenu->next != NULL)
-				uih->currentMenu = uih->currentMenu->next;
-			break;
 	}
 	
 	UserInterface_p_DrawMenu(uih);
@@ -278,7 +279,7 @@ void UserInterface_InitPages(UiHandle* uih)
 	if (!settingMenus)
 		return;
 	UserInterface_InitMenu(&settingMenus[0], "Time", 					NULL, &settingMenus[1], NULL, &uih->pages[SettingPageIdx], &uih->pages[SetTimePageIdx], NULL, NULL);
-	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, NULL, &uih->pages[SettingPageIdx], NULL, NULL, setSleepTimeMenuCallback);
+	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, NULL, &uih->pages[SettingPageIdx], &uih->pages[SetSleepTimePageIdx], NULL, NULL);
 	
 	uih->pages[SettingPageIdx].text = "Settings";
 	uih->pages[SettingPageIdx].menu = settingMenus;
@@ -314,6 +315,19 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[SetTimePageIdx].onLeave = NULL;
 	uih->pages[SetTimePageIdx].onHandleInput = setTimePageInputCallback;
 	uih->pages[SetTimePageIdx].data = setTimeData;
+
+	/* Init Set Sleep Time Page And Data */
+
+	SetSleepTimePageData* setSleepTimeData = malloc(sizeof(SetSleepTimePageData));	
+	setSleepTimeData->sleepTime = 0;
+	
+	uih->pages[SetSleepTimePageIdx].text = NULL;
+	uih->pages[SetSleepTimePageIdx].actionIcons = "%('!";
+	uih->pages[SetSleepTimePageIdx].onInit = setSleepTimePageOnInitCallback;
+	uih->pages[SetSleepTimePageIdx].onUpdate = setSleepTimePageUpdateCallback;
+	uih->pages[SetSleepTimePageIdx].onLeave = NULL;
+	uih->pages[SetSleepTimePageIdx].onHandleInput = setSleepTimePageInputCallback;
+	uih->pages[SetSleepTimePageIdx].data = setSleepTimeData;
 
 	/* Init Message Popup And Data */
 	
@@ -577,6 +591,68 @@ void setTimePageInputCallback(void* uih, enum ActionType action)
 	}
 }
 
+void setSleepTimePageOnInitCallback(void* uih)
+{
+	UiHandle* hnd = uih;
+	SetSleepTimePageData* data = hnd->currentPage->data;
+
+	data->sleepTime = 30;	// set to saved value
+}
+
+uint8_t setSleepTimePageUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 300)
+		return 0;
+	
+	UiHandle* hnd = uih;
+	SetSleepTimePageData* data = hnd->currentPage->data;
+	
+	ssd1306_Fill(Black);
+
+	char timeBuff[8] = {0};
+	snprintf(timeBuff, 8, "%d", data->sleepTime);
+	
+	ssd1306_SetCursor(5, 5);
+	ssd1306_WriteString(timeBuff, Font_11x18, White);
+
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	SCR_DIRTY_ARG(hnd);
+	return 1;
+}
+
+void setSleepTimePageInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	SetSleepTimePageData* data = hnd->currentPage->data;
+
+	switch(action)
+	{
+		case Key1:
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			break;
+		case Key2:
+			if (data->sleepTime == 0)
+				data->sleepTime = 120;
+			else
+				data->sleepTime--;
+			break;
+		case Key3:
+			if (data->sleepTime == 120)
+				data->sleepTime = 0;
+			else
+				data->sleepTime++;
+			break;
+		case Key4:
+			if (xTimerChangePeriod(sleepTimerHandle, data->sleepTime * 1000 / portTICK_PERIOD_MS, 100) == pdPASS)
+				UserInterface_ShowPopup(uih, "Time Set!", 3, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			else
+				Error_Handler();
+			break;
+		default:
+			break;
+	}
+}
+
 void messagePopupOnInitCallback(void* uih)
 {
 	UiHandle* hnd = uih;
@@ -604,14 +680,5 @@ void messagePopupInputCallback(void* uih, enum ActionType action)
 	MessagePopupData* data = hnd->currentPage->data;
 
 	UserInterface_ChangePage(uih, data->fallbackPage);
-}
-
-void setSleepTimeMenuCallback()
-{
-	  ssd1306_Fill(Black);
-		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString("00", Font_11x18, White);
-		ssd1306_UpdateScreen(&hi2c1);
-		osDelay(1000);
 }
 
