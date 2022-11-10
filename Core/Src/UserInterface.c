@@ -25,12 +25,12 @@ void UserInterface_Init(UiHandle* uih)
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
 {	
 	if (uih->currentPage != NULL && uih->currentPage->onLeave)
-		uih->currentPage->onLeave();
+		uih->currentPage->onLeave(uih);
 	
 	uih->currentPage = page;
 	
 	if (uih->currentPage->onInit)
-		uih->currentPage->onInit();
+		uih->currentPage->onInit(uih);
 	
 	if (uih->currentPage->text && uih->currentPage->menu)
 	{
@@ -104,7 +104,7 @@ void UserInterface_HandleInput(UiHandle* uih, uint16_t input)
 	}
 }
 
-void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* children, menuCallback callback)
+void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* page, void* children, menuCallback callback)
 {
 	if (!menu)
 		return;
@@ -114,6 +114,7 @@ void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, voi
 	(menu)->next = next;
 	(menu)->parent = parent;
 	(menu)->parentPage = parentPage;
+	(menu)->page = page;
 	(menu)->children = children;
 	(menu)->callback = callback;
 }
@@ -219,6 +220,10 @@ void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action)
 			{
 				uih->currentMenu = uih->currentMenu->children;
 			}
+			else if (uih->currentMenu->page != NULL)
+			{
+				UserInterface_ChangePage(uih, uih->currentMenu->page);
+			}
 			break;
 		}
 		case Key4:
@@ -258,21 +263,22 @@ void UserInterface_InitPages(UiHandle* uih)
 	if (!uih->pages)
 		return;
 	
-	// Create Main Page
+	/* Init Main Page */
 	uih->pages[MainPageIdx].text = "Main Page";
 	uih->pages[MainPageIdx].actionIcons = NULL;
 	uih->pages[MainPageIdx].onInit = NULL;
 	uih->pages[MainPageIdx].onUpdate = mainPageUpdateCallback;
 	uih->pages[MainPageIdx].onLeave = NULL;
 	uih->pages[MainPageIdx].onHandleInput = mainPageInputCallback;
+	uih->pages[MainPageIdx].data = NULL;
 
-	// Create Settings Page And Menus
+	/* Init Settings Page And Menus */
 	
 	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * 2);
 	if (!settingMenus)
 		return;
-	UserInterface_InitMenu(&settingMenus[0], "Time", 					NULL, &settingMenus[1], NULL, &uih->pages[SettingPageIdx], NULL, setTimeMenuCallback);
-	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, NULL, &uih->pages[SettingPageIdx], NULL, setSleepTimeMenuCallback);
+	UserInterface_InitMenu(&settingMenus[0], "Time", 					NULL, &settingMenus[1], NULL, &uih->pages[SettingPageIdx], &uih->pages[SetTimePageIdx], NULL, NULL);
+	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, NULL, &uih->pages[SettingPageIdx], NULL, NULL, setSleepTimeMenuCallback);
 	
 	uih->pages[SettingPageIdx].text = "Settings";
 	uih->pages[SettingPageIdx].menu = settingMenus;
@@ -281,17 +287,63 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[SettingPageIdx].onUpdate = NULL;
 	uih->pages[SettingPageIdx].onLeave = NULL;
 	uih->pages[SettingPageIdx].onHandleInput = settingsPageInputCallback;
+	uih->pages[SettingPageIdx].data = NULL;
+
+	/* Init Set Time Page And Data */
 	
+	RTC_TimeTypeDef *sTime = malloc(sizeof(RTC_TimeTypeDef));
+	if (HAL_RTC_GetTime(&hrtc, sTime, RTC_FORMAT_BCD) != HAL_OK)
+	{
+		Error_Handler();
+	}
+		
+	RTC_DateTypeDef *sDate = malloc(sizeof(RTC_DateTypeDef));
+	if (HAL_RTC_GetDate(&hrtc, sDate, RTC_FORMAT_BCD) != HAL_OK)
+	{
+		Error_Handler();
+	}
+
+	SetTimePageData* setTimeData = malloc(sizeof(SetTimePageData));	
+	setTimeData->sTime = sTime;
+	setTimeData->sDate = sDate;
+	
+	uih->pages[SetTimePageIdx].text = NULL;
+	uih->pages[SetTimePageIdx].actionIcons = "%('!";
+	uih->pages[SetTimePageIdx].onInit = setTimePageOnInitCallback;
+	uih->pages[SetTimePageIdx].onUpdate = setTimePageUpdateCallback;
+	uih->pages[SetTimePageIdx].onLeave = NULL;
+	uih->pages[SetTimePageIdx].onHandleInput = setTimePageInputCallback;
+	uih->pages[SetTimePageIdx].data = setTimeData;
+
+	/* Init Message Popup And Data */
+	
+	MessagePopupData* msgPopupData = malloc(sizeof(MessagePopupData));
+	msgPopupData->secondCounter = 0;
+	msgPopupData->secondsToShow = 0;
+	msgPopupData->fallbackPage = NULL;
+	
+	uih->pages[MessagePopupIdx].text = NULL;
+	uih->pages[MessagePopupIdx].actionIcons = "";
+	uih->pages[MessagePopupIdx].onInit = messagePopupOnInitCallback;
+	uih->pages[MessagePopupIdx].onUpdate = messagePopupUpdateCallback;
+	uih->pages[MessagePopupIdx].onLeave = NULL;
+	uih->pages[MessagePopupIdx].onHandleInput = messagePopupInputCallback;
+	uih->pages[MessagePopupIdx].data = msgPopupData;
+
+
 	UserInterface_ChangePage(uih, &uih->pages[MainPageIdx]);
 }
 
-// TODO change the location of these two methods
-uint8_t DecodeBCD(uint8_t bin) {
-	return (((bin & 0xf0) >> 4) * 10) + (bin & 0x0f);
-}
-
-uint8_t EncodeBCD(uint8_t dec) {
-	return (dec % 10 + ((dec / 10) << 4));
+void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToShow, UiPagePtr fallbackPage)
+{
+	if (fallbackPage == NULL)
+		fallbackPage = uih->currentPage;
+	
+	MessagePopupData* popupData = uih->pages[MessagePopupIdx].data;
+	popupData->secondsToShow = secondsToShow;
+	popupData->fallbackPage = fallbackPage;
+	uih->pages[MessagePopupIdx].text = text;
+	UserInterface_ChangePage(uih, &uih->pages[MessagePopupIdx]);
 }
 
 uint8_t mainPageUpdateCallback(void* uih, uint32_t since)
@@ -365,67 +417,193 @@ void settingsPageInputCallback(void* uih, enum ActionType action)
 	}
 }
 
-void setTimeMenuCallback()
+void setTimePageOnInitCallback(void* uih)
 {
-	/*while (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET);
+	UiHandle* hnd = uih;
+	SetTimePageData* data = hnd->currentPage->data;
 
-	char time[6] = "00:00";
-	char charPtr = 0;
-	char showChar = 1;
-	char confirmed = 0;
+	data->settingStep = 0;
+	data->updateStep = 0;
 	
-	while (confirmed == 0)
+	if (HAL_RTC_GetTime(&hrtc, data->sTime, RTC_FORMAT_BCD) != HAL_OK)
 	{
-		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
-			// prev
-			if (charPtr > 0)
-			{
-				charPtr--;
-				if (charPtr == 2)
-					charPtr--;
-			}
-		}
-		if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
-			// back
-			confirmed = 1;
-		}
-		if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
-			// set
-			char* s = (time+charPtr);
-			if (*s < 0x39)
-				*(time+charPtr) = *s + 1;
-			else
-				*s = 0x30;
-		}
-		if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
-			// next
-			if (charPtr < 4)
-			{
-				charPtr++;
-				if (charPtr == 2)
-					charPtr++;
-			}
-		}
-		
-		ssd1306_Fill(Black);
-		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString(time, Font_11x18, White);
-		ssd1306_UpdateScreen(&hi2c1);
-		
-		waitReleaseAllKeys();
-		osDelay(500);
+		Error_Handler();
 	}
 	
-		ssd1306_Fill(Black);
+	if (HAL_RTC_GetDate(&hrtc, data->sDate, RTC_FORMAT_BCD) != HAL_OK)
+	{
+		Error_Handler();
+	}
+}
+
+uint8_t setTimePageUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 300)
+		return 0;
+	
+	UiHandle* hnd = uih;
+	SetTimePageData* data = hnd->currentPage->data;
+
+	ssd1306_Fill(Black);
+	if (data->settingStep == 0)
+	{
+		char dateBuff[24] = {0};
+		char ptr[7] = {' ', ' ', ' ', ' ', ' ', ' ', '\0'};
+		if (data->updateStep == 0) {
+			ptr[0] = '[';
+			ptr[1] = ']';
+		}
+		else if (data->updateStep == 1) {
+			ptr[2] = '[';
+			ptr[3] = ']';
+		}
+		else if (data->updateStep == 2) {
+			ptr[4] = '[';
+			ptr[5] = ']';
+		}
+		
+		if (data->updateStep != 2)
+			snprintf(dateBuff, 16, "%c%02d%c-%c%02d%c-", ptr[0], _D(data->sDate->Year), ptr[1], 
+																										ptr[2], _D(data->sDate->Month)+1, ptr[3]);
+		else
+			snprintf(dateBuff, 16, "-%c%02d%c-%c%02d%c", ptr[2], _D(data->sDate->Month)+1, ptr[3], 
+																									ptr[4], _D(data->sDate->Date)+1, ptr[5]);
+		
+		// should set date
 		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString("Confirmed", Font_11x18, White);
-		ssd1306_UpdateScreen(&hi2c1);
-*/
-	  ssd1306_Fill(Black);
+		ssd1306_WriteString(dateBuff, Font_11x18, White);
+	}
+	else if (data->settingStep == 1)
+	{
+		const char* week_days[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString("0", Font_11x18, White);
-		ssd1306_UpdateScreen(&hi2c1);
-		osDelay(1000);
+		ssd1306_WriteString(week_days[data->sDate->WeekDay], Font_11x18, White);
+	}
+	else if (data->settingStep == 2)
+	{
+		char timeBuff[16] = {0};
+		char ptr[5] = {' ', ' ', ' ', ' ', '\0'};
+		if (data->updateStep == 0) {
+			ptr[0] = '[';
+			ptr[1] = ']';
+		}
+		else if (data->updateStep == 1) {
+			ptr[2] = '[';
+			ptr[3] = ']';
+		}
+		snprintf(timeBuff, 16, "%c%02d%c:%c%02d%c", ptr[0], _D(data->sTime->Hours), ptr[1], 
+																								ptr[2], _D(data->sTime->Minutes), ptr[3]);
+
+		// should set time
+		ssd1306_SetCursor(5, 5);
+		ssd1306_WriteString(timeBuff, Font_11x18, White);
+	}
+
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	
+	SCR_DIRTY_ARG(hnd);
+	return 1;
+}
+
+void setTimePageInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	SetTimePageData* data = hnd->currentPage->data;
+
+	switch(action)
+	{
+		case Key1:
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			break;
+		case Key2:
+			if (data->settingStep == 0)
+			{
+				data->updateStep == 0 && (data->sDate->Year = _E((_D(data->sDate->Year) + 99 - 1) % 99));
+				data->updateStep == 1 && (data->sDate->Month = _E((_D(data->sDate->Month) + 12 - 1) % 12));
+				data->updateStep == 2 && (data->sDate->Date = _E((_D(data->sDate->Date) + 31 - 1) % 31));
+			}
+			else if (data->settingStep == 1)
+			{
+				data->sDate->WeekDay = _E((_D(data->sDate->WeekDay) + 7 - 1) % 7);
+			}
+			else if (data->settingStep == 2)
+			{
+				data->updateStep == 0 && (data->sTime->Hours = _E((_D(data->sTime->Hours) + 24 - 1) % 24));
+				data->updateStep == 1 && (data->sTime->Minutes = _E((_D(data->sTime->Minutes) + 60 - 1) % 60));
+			}
+			break;
+		case Key3:
+			if (data->settingStep == 0)
+			{
+				data->updateStep == 0 && (data->sDate->Year = _E((_D(data->sDate->Year) + 1) % 99));
+				data->updateStep == 1 && (data->sDate->Month = _E((_D(data->sDate->Month) + 1) % 12));
+				data->updateStep == 2 && (data->sDate->Date = _E((_D(data->sDate->Date) + 1) % 31));
+			}
+			else if (data->settingStep == 1)
+			{
+				data->sDate->WeekDay = (data->sDate->WeekDay + 1) % 7;
+			}
+			else if (data->settingStep == 2)
+			{
+				data->sTime->Seconds = 0;
+				data->updateStep == 0 && (data->sTime->Hours = _E((_D(data->sTime->Hours) + 1) % 24));
+				data->updateStep == 1 && (data->sTime->Minutes = _E((_D(data->sTime->Minutes) + 1) % 60));
+			}
+			break;
+		case Key4:
+			if (data->settingStep == 0)
+			{
+				data->updateStep = (data->updateStep + 1) % 3;
+				if (data->updateStep == 0)
+					data->settingStep++;
+			}
+			else if (data->settingStep == 1)
+			{
+				data->settingStep++;
+			}
+			else if (data->settingStep == 2)
+			{
+				data->updateStep = (data->updateStep + 1) % 2;
+				if (data->updateStep == 0) {
+					if (HAL_RTC_SetDate(&hrtc, data->sDate, RTC_FORMAT_BCD) != HAL_OK || HAL_RTC_SetTime(&hrtc, data->sTime, RTC_FORMAT_BCD) != HAL_OK)
+						Error_Handler();
+					else
+						UserInterface_ShowPopup(uih, "Time Set!", 3, &((UiHandle*)uih)->pages[SettingPageIdx]);
+				}
+			}
+			break;
+		default:
+			break;
+	}
+}
+
+void messagePopupOnInitCallback(void* uih)
+{
+	UiHandle* hnd = uih;
+	MessagePopupData* data = hnd->currentPage->data;
+
+	data->secondCounter = 0;
+}
+
+uint8_t messagePopupUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 950)
+		return 0;
+	
+	UiHandle* hnd = uih;
+	MessagePopupData* data = hnd->currentPage->data;
+	if (++data->secondCounter >= data->secondsToShow)
+		UserInterface_ChangePage(uih, data->fallbackPage);
+	
+	return 1;
+}
+
+void messagePopupInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	MessagePopupData* data = hnd->currentPage->data;
+
+	UserInterface_ChangePage(uih, data->fallbackPage);
 }
 
 void setSleepTimeMenuCallback()

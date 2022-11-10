@@ -136,7 +136,7 @@ int main(void)
   sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
 
   /* USER CODE BEGIN RTOS_TIMERS */
-	xTimerChangePeriod(sleepTimerHandle, 10000 / portTICK_PERIOD_MS, 100);
+	xTimerChangePeriod(sleepTimerHandle, 30000 / portTICK_PERIOD_MS, 100);
 	xTimerStart(sleepTimerHandle, 100);
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */

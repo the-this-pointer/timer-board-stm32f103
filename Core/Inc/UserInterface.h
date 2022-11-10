@@ -4,12 +4,13 @@
 #include "ssd1306.h"
 #include "fonts.h"
 #include "main.h"
+#include "utils.h"
 #include <stdlib.h>
 #include <stdio.h>
 
 enum ActionType {Key1, Key2, Key3, Key4};
 
-typedef void(*pageLifeCycleCallback)();
+typedef void(*pageLifeCycleCallback)(void* uih);
 typedef void(*pageInputCallback)(void* uih, enum ActionType action);
 typedef uint8_t(*pageUpdateCallback)(void* uih, uint32_t since);
 typedef void(*menuCallback)();
@@ -22,6 +23,7 @@ typedef struct {
 	void* children;
 	
 	void* parentPage;
+	void* page;
 	
 	menuCallback callback;
 } UiMenu, *UiMenuPtr;
@@ -35,6 +37,8 @@ typedef struct {
 	pageLifeCycleCallback onLeave;
 	pageUpdateCallback onUpdate;
 	pageInputCallback onHandleInput;
+	
+	void* data;
 } UiPage, *UiPagePtr;
 
 typedef struct {
@@ -48,7 +52,7 @@ typedef struct {
 void UserInterface_Init(UiHandle* uih);
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page);
 void UserInterface_HandleInput(UiHandle* uih, uint16_t input);
-void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* children, menuCallback callback);
+void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* page, void* children, menuCallback callback);
 uint8_t UserInterface_Update(UiHandle* uih, uint32_t since);
 void UserInterface_Flush(UiHandle* uih);
 
@@ -62,13 +66,37 @@ void UserInterface_p_DrawActions(const char* actions);
 
 
 // Ui Callbacks
-enum Pages {MainPageIdx, SettingPageIdx, MaxPages};
+enum Pages {MainPageIdx, SettingPageIdx, SetTimePageIdx, MessagePopupIdx, MaxPages};
 
 void UserInterface_InitPages(UiHandle* uih);
+void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToShow, UiPagePtr fallbackPage);
+/* Main Page */
 uint8_t mainPageUpdateCallback(void* uih, uint32_t since);
 void mainPageInputCallback(void* uih, enum ActionType action);
+/* Settings */
 void settingsPageInputCallback(void* uih, enum ActionType action);
-void setTimeMenuCallback();
+/* Set Time */
+typedef struct set_time_data {
+	uint8_t settingStep;	/* setting date(0) or weekday(1) or time(2) */
+	uint8_t updateStep;		/* used for pointing which section is active */
+	RTC_TimeTypeDef *sTime;
+	RTC_DateTypeDef *sDate;
+} SetTimePageData;
+
+void setTimePageOnInitCallback(void* uih);
+uint8_t setTimePageUpdateCallback(void* uih, uint32_t since);
+void setTimePageInputCallback(void* uih, enum ActionType action);
+/* Message Popup */
+typedef struct message_popup_data {
+	uint8_t secondsToShow;
+	uint8_t secondCounter;
+	UiPagePtr fallbackPage;
+} MessagePopupData;
+void messagePopupOnInitCallback(void* uih);
+uint8_t messagePopupUpdateCallback(void* uih, uint32_t since);
+void messagePopupInputCallback(void* uih, enum ActionType action);
+
+
 void setSleepTimeMenuCallback();
 
 

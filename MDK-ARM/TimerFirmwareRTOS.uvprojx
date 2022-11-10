@@ -433,6 +433,11 @@
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32f1xx_hal_timebase_tim.c</FilePath>
             </File>
+            <File>
+              <FileName>utils.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\utils.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -627,6 +632,11 @@
               <FileName>UserInterface.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Core\Inc\UserInterface.h</FilePath>
+            </File>
+            <File>
+              <FileName>utils.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\utils.h</FilePath>
             </File>
           </Files>
         </Group>
