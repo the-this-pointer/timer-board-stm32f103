@@ -438,6 +438,11 @@
               <FileType>1</FileType>
               <FilePath>..\Core\Src\utils.c</FilePath>
             </File>
+            <File>
+              <FileName>Timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\Timer.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -637,6 +642,11 @@
               <FileName>utils.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Core\Inc\utils.h</FilePath>
+            </File>
+            <File>
+              <FileName>Timer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\Timer.h</FilePath>
             </File>
           </Files>
         </Group>
