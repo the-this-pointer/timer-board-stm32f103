@@ -4,7 +4,15 @@
 
 void Timer_TimeListInit(TimeList* list)
 {
-	memset(list, 0, sizeof(TimeList));
+	uint8_t i,j;
+	for(i = 0; i < MAX_PLANS; i++)
+	{
+		list->plans[i].mode = NotAssigned;
+		list->plans[i].day = 0;
+		
+		for (j = 0; j < MAX_TIMES_PER_DAY; j++)
+			list->plans[i].items[j] = NULL;
+	}
 }
 
 uint8_t Timer_GetEmptySlot(TimeList* list)
@@ -154,5 +162,5 @@ uint8_t TimePlan_IsEmpty(TimePlan* plan)
 
 uint8_t TimerItem_IsEmpty(TimerItem* item)
 {
-	return item == NULL || item->time == 0;
+	return item == NULL;
 }

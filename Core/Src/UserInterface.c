@@ -11,10 +11,12 @@ extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
 extern osMutexId lcdMutexHandle;
 extern osTimerId sleepTimerHandle;
-extern TimeList* timeList;
+extern TimeList timeList;
 
 uint8_t	g_menuActionsOffset = 0;
 const char* g_menuActionIcons = "%#$!";
+const char* g_timeModes = " DWM";
+const char* g_weekDays[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 
 #define ACT_OFST(a, b) \
 	if (g_menuActionsOffset == 0) \
@@ -305,7 +307,31 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[TimeListPageIdx].onUpdate = timeListPageUpdateCallback;
 	uih->pages[TimeListPageIdx].onLeave = NULL;
 	uih->pages[TimeListPageIdx].onHandleInput = timeListPageInputCallback;
-	uih->pages[TimeListPageIdx].data = NULL;
+	uih->pages[TimeListPageIdx].data = timeListData;
+
+	/* Add Time Plan Page And Menus */
+	AddTimePlanPageData* addTimePlanData = malloc(sizeof(AddTimePlanPageData));	
+
+	uih->pages[AddTimePlanPageIdx].text = "Time Plan";
+	uih->pages[AddTimePlanPageIdx].menu = NULL;
+	uih->pages[AddTimePlanPageIdx].actionIcons = "%('!";
+	uih->pages[AddTimePlanPageIdx].onInit = addTimePlanPageOnInitCallback;
+	uih->pages[AddTimePlanPageIdx].onUpdate = addTimePlanPageUpdateCallback;
+	uih->pages[AddTimePlanPageIdx].onLeave = NULL;
+	uih->pages[AddTimePlanPageIdx].onHandleInput = addTimePlanPageInputCallback;
+	uih->pages[AddTimePlanPageIdx].data = addTimePlanData;
+
+	/* Add Timer Item Page And Menus */
+	AddTimerItemPageData* addTimerItemData = malloc(sizeof(AddTimerItemPageData));	
+
+	uih->pages[AddTimerItemPageIdx].text = "Timer Item";
+	uih->pages[AddTimerItemPageIdx].menu = NULL;
+	uih->pages[AddTimerItemPageIdx].actionIcons = "%('!";
+	uih->pages[AddTimerItemPageIdx].onInit = addTimerItemPageOnInitCallback;
+	uih->pages[AddTimerItemPageIdx].onUpdate = addTimerItemPageUpdateCallback;
+	uih->pages[AddTimerItemPageIdx].onLeave = NULL;
+	uih->pages[AddTimerItemPageIdx].onHandleInput = addTimerItemPageInputCallback;
+	uih->pages[AddTimerItemPageIdx].data = addTimerItemData;
 
 	/* Init Settings Page And Menus */
 	
@@ -460,7 +486,7 @@ void timeListPageOnInitCallback(void* uih)
 	UiHandle* hnd = uih;
 	TimeListPageData* data = hnd->currentPage->data;
 
-	data->plan = Timer_GetNextFullSlot(timeList, 0);
+	data->plan = Timer_GetNextFullSlot(&timeList, 0);
 }
 
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
@@ -478,7 +504,10 @@ uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
 		ssd1306_WriteString("Empty List!", Font_11x18, White);
 	} else {
 		char buff[16] = {0};
-		snprintf(buff, 16, "%c: %d", data->plan->mode == Monthly? 'M': (data->plan->mode == Weekly? 'W': 'D'), data->plan->day);
+		if (data->plan->mode != Daily)
+			snprintf(buff, 16, "%c: %d", g_timeModes[data->plan->mode], data->plan->day);
+		else
+			snprintf(buff, 16, "%c", g_timeModes[data->plan->mode]);
 		
 		ssd1306_SetCursor(5, 5);
 		ssd1306_WriteString(buff, Font_11x18, White);
@@ -507,20 +536,20 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		case Key2:
 		{
 			ACT_OFST(
-							TimePlan* p = Timer_GetPrevFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
+							TimePlan* p = Timer_GetPrevFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
-							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx]) /* Go to add page */
+							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimePlanPageIdx])
 			)
 			break;
 		}
 		case Key3:
 			ACT_OFST(
-							TimePlan* p = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
+							TimePlan* p = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
-							Timer_RemovePlan(timeList, Timer_ToOffset(timeList, data->plan)); 
-							data->plan = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan))
+							Timer_RemovePlan(&timeList, Timer_ToOffset(&timeList, data->plan)); 
+							data->plan = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan))
 			)
 			break;
 		case Key4:
@@ -530,6 +559,232 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx])
 			)
 			break;
+		default:
+			break;
+	}
+}
+
+void addTimePlanPageOnInitCallback(void* uih)
+{
+	UiHandle* hnd = uih;
+	AddTimePlanPageData* data = hnd->currentPage->data;
+
+	data->settingStep = 0;
+	data->plan.day = 0;
+	data->plan.mode = Daily;
+	
+	int i;
+	for (i = 0; i < MAX_TIMES_PER_DAY; i++)
+		TimePlan_RemoveItem(&data->plan, i);
+}
+
+uint8_t addTimePlanPageUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 400)
+		return 0;
+	
+	UiHandle* hnd = uih;
+	AddTimePlanPageData* data = hnd->currentPage->data;
+
+	ssd1306_Fill(Black);
+	ssd1306_SetCursor(5, 5);
+
+	char buff[24] = {0};
+	switch(data->settingStep)
+	{
+		case 0:	//setting plan mode
+		{
+			snprintf(buff, 24, "Mode: %c", g_timeModes[data->plan.mode]);
+			break;
+		}
+		case 1: //setting day if mode is w/m
+		{
+			if (data->plan.mode == Weekly)
+			{
+				snprintf(buff, 24, "Day: %s", g_weekDays[data->plan.day]);
+			}
+			else if (data->plan.mode == Monthly)
+			{
+				snprintf(buff, 24, "Day: %d", data->plan.day+1);
+			}
+			break;
+		}
+	}
+	ssd1306_WriteString(buff, Font_11x18, White);
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	
+	SCR_DIRTY_ARG(hnd);
+	return 1;
+}
+
+void addTimePlanPageInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	AddTimePlanPageData* data = hnd->currentPage->data;
+
+	switch(action)
+	{
+		case Key1:
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+			break;
+		case Key2:
+			if (data->settingStep == 0)
+			{
+				data->plan.mode = (data->plan.mode + 4 - 1) % 4;
+				if (data->plan.mode == 0)
+					data->plan.mode = Daily;
+			}
+			else if (data->settingStep == 1)
+			{
+				if (data->plan.mode == Weekly)
+					data->plan.day = (data->plan.day + 7 - 1) % 7;
+				else if (data->plan.mode == Monthly)
+					data->plan.day = (data->plan.day + 31 - 1) % 31;
+			}
+			break;
+		case Key3:
+			if (data->settingStep == 0)
+			{
+				data->plan.mode = (data->plan.mode + 1) % 4;
+				if (data->plan.mode == 0)
+					data->plan.mode = Monthly;
+			}
+			else if (data->settingStep == 1)
+			{
+				if (data->plan.mode == Weekly)
+					data->plan.day = (data->plan.day + 1) % 7;
+				else if (data->plan.mode == Monthly)
+					data->plan.day = (data->plan.day + 1) % 31;
+			}
+			break;
+		case Key4:
+		{
+			if (data->plan.mode != Daily && data->settingStep < 1)
+			{
+				data->settingStep++;
+			}
+			else
+			{
+				TimePlan* newPlan = Timer_AddPlan(&timeList, data->plan.mode);
+				if (newPlan == NULL)
+					Error_Handler();
+				newPlan->day = data->plan.day+1;
+				
+				AddTimerItemPageData* addItemData = ((UiHandle*)uih)->pages[AddTimerItemPageIdx].data;
+				addItemData->plan = newPlan;
+				UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+			}
+			break;
+		}
+		default:
+			break;
+	}
+}
+
+void addTimerItemPageOnInitCallback(void* uih)
+{
+	UiHandle* hnd = uih;
+	AddTimerItemPageData* data = hnd->currentPage->data;
+
+	data->settingStep = 0;
+	data->hours = 0;
+	data->minutes = 0;
+	data->status = 0;
+}
+
+uint8_t addTimerItemPageUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 400)
+		return 0;
+	
+	UiHandle* hnd = uih;
+	AddTimerItemPageData* data = hnd->currentPage->data;
+
+	ssd1306_Fill(Black);
+	ssd1306_SetCursor(5, 5);
+
+	char buff[24] = {0};
+	switch(data->settingStep)
+	{
+		case 0:	//setting hour
+		{
+			snprintf(buff, 24, "[%02d]: %02d", data->hours, data->minutes);
+			break;
+		}
+		case 1:	//setting minute
+		{
+			snprintf(buff, 24, "%02d :[%02d]", data->hours, data->minutes);
+			break;
+		}
+		case 2: //setting status
+		{
+			snprintf(buff, 24, "Status: %s", data->status? "On": "Off");
+			break;
+		}
+	}
+	ssd1306_WriteString(buff, Font_11x18, White);
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	
+	SCR_DIRTY_ARG(hnd);
+	return 1;
+}
+
+void addTimerItemPageInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	AddTimerItemPageData* data = hnd->currentPage->data;
+
+	switch(action)
+	{
+		case Key1:
+			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+			break;
+		case Key2:
+			if (data->settingStep == 0)
+			{
+				data->hours = (data->hours + 24 - 1) % 24;
+			}
+			else if (data->settingStep == 1)
+			{
+				data->minutes = (data->minutes + 60 - 1) % 60;
+			}
+			else if (data->settingStep == 2)
+			{
+				data->status = (data->status + 2 - 1) % 2;
+			}
+			break;
+		case Key3:
+			if (data->settingStep == 0)
+			{
+				data->hours = (data->hours + 1) % 24;
+			}
+			else if (data->settingStep == 1)
+			{
+				data->minutes = (data->minutes + 1) % 60;
+			}
+			else if (data->settingStep == 2)
+			{
+				data->status = (data->status + 1) % 2;
+			}
+			break;
+		case Key4:
+		{
+			if (data->settingStep < 2)
+			{
+				data->settingStep++;
+			}
+			else
+			{
+				TimerItem* item = TimePlan_AddItem(data->plan);
+				if (item == NULL)
+					Error_Handler();
+				
+				item->status = data->status;
+				item->time = data->hours * 3600 + data->minutes * 60;
+				UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+			}
+			break;
+		}
 		default:
 			break;
 	}
@@ -605,9 +860,8 @@ uint8_t setTimePageUpdateCallback(void* uih, uint32_t since)
 	}
 	else if (data->settingStep == 1)
 	{
-		const char* week_days[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString(week_days[data->sDate->WeekDay], Font_11x18, White);
+		ssd1306_WriteString(g_weekDays[data->sDate->WeekDay], Font_11x18, White);
 	}
 	else if (data->settingStep == 2)
 	{

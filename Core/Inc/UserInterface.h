@@ -67,7 +67,11 @@ void UserInterface_p_DrawActions(const char* actions);
 
 
 // Ui Callbacks
-enum Pages {MainPageIdx, TimeListPageIdx, SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, MaxPages};
+enum Pages {
+	MainPageIdx, TimeListPageIdx, AddTimePlanPageIdx, AddTimerItemPageIdx,
+	SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, 
+	MaxPages
+};
 
 void UserInterface_InitPages(UiHandle* uih);
 void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToShow, UiPagePtr fallbackPage);
@@ -81,6 +85,25 @@ typedef struct time_list_data {
 void timeListPageOnInitCallback(void* uih);
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since);
 void timeListPageInputCallback(void* uih, enum ActionType action);
+/* Add Time Plan */
+typedef struct add_time_plan_data {
+	TimePlan plan;
+	uint8_t settingStep;
+} AddTimePlanPageData;
+void addTimePlanPageOnInitCallback(void* uih);
+uint8_t addTimePlanPageUpdateCallback(void* uih, uint32_t since);
+void addTimePlanPageInputCallback(void* uih, enum ActionType action);
+/* Add Timer Item */
+typedef struct add_timer_item_data {
+	TimePlan* plan;
+	uint8_t settingStep;	
+	uint8_t hours;
+	uint8_t minutes;
+	uint8_t status;
+} AddTimerItemPageData;
+void addTimerItemPageOnInitCallback(void* uih);
+uint8_t addTimerItemPageUpdateCallback(void* uih, uint32_t since);
+void addTimerItemPageInputCallback(void* uih, enum ActionType action);
 /* Settings */
 void settingsPageInputCallback(void* uih, enum ActionType action);
 /* Set Time */
