@@ -15,7 +15,8 @@ enum TimeMode {
 };
 
 typedef struct timer_item {
-	uint16_t time;
+	uint8_t hours;
+	uint8_t minutes;
 	uint8_t  status;
 } TimerItem;
 
@@ -43,6 +44,7 @@ void TimePlan_RemoveItem(TimePlan* plan, uint8_t offset);
 uint8_t TimePlan_GetEmptySlot(TimePlan* plan);
 TimerItem* TimePlan_GetNextFullSlot(TimePlan* plan, uint8_t start);
 TimerItem* TimePlan_GetPrevFullSlot(TimePlan* plan, uint8_t start);
+uint8_t TimePlan_ToOffset(TimePlan* plan, TimerItem* item);
 
 uint8_t TimePlan_IsEmpty(TimePlan* plan);
 uint8_t TimerItem_IsEmpty(TimerItem* item);

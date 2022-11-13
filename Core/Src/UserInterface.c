@@ -487,35 +487,71 @@ void timeListPageOnInitCallback(void* uih)
 	TimeListPageData* data = hnd->currentPage->data;
 
 	data->plan = Timer_GetNextFullSlot(&timeList, 0);
+	data->screenIndex = 0;
+	data->itemIndex = 0;
 }
 
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
 {
-	if (since < 400)
+	if (since < 800)
 		return 0;
 	UiHandle* hnd = uih;
 	TimeListPageData* data = hnd->currentPage->data;
-	
-	ssd1306_Fill(Black);
-	
+		
 	if (data->plan == NULL)
 	{
+		ssd1306_Fill(Black);
+
 		ssd1306_SetCursor(5, 5);
 		ssd1306_WriteString("Empty List!", Font_11x18, White);
+		
+		UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+		SCR_DIRTY_ARG(hnd);
 	} else {
 		char buff[16] = {0};
-		if (data->plan->mode != Daily)
-			snprintf(buff, 16, "%c: %d", g_timeModes[data->plan->mode], data->plan->day);
-		else
-			snprintf(buff, 16, "%c", g_timeModes[data->plan->mode]);
 		
-		ssd1306_SetCursor(5, 5);
-		ssd1306_WriteString(buff, Font_11x18, White);
+		if (data->screenIndex == 0)	// displays for about 1 second
+		{
+			ssd1306_Fill(Black);
+
+			if (data->plan->mode != Daily)
+				snprintf(buff, 16, "%c: %d", g_timeModes[data->plan->mode], data->plan->day);
+			else
+				snprintf(buff, 16, "%c", g_timeModes[data->plan->mode]);
+			ssd1306_SetCursor(5, 5);
+			ssd1306_WriteString(buff, Font_11x18, White);
+
+			UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+			SCR_DIRTY_ARG(hnd);
+		}
+		else if (data->screenIndex > 1)
+		{
+			TimerItem* item = TimePlan_GetNextFullSlot(data->plan, data->itemIndex);
+			if (item != NULL)
+			{
+				ssd1306_Fill(Black);
+
+				uint8_t offset = TimePlan_ToOffset(data->plan, item);
+				data->itemIndex = offset;
+				
+				snprintf(buff, 16, "%02d:%02d [%s]", item->hours, item->minutes, item->status? "On": "Off");
+				ssd1306_SetCursor(5, 5);
+				ssd1306_WriteString(buff, Font_11x18, White);
+
+				data->screenIndex++;
+
+				UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+				SCR_DIRTY_ARG(hnd);
+			} else if (data->itemIndex == INVALID_SLOT) {
+				data->itemIndex = 0;
+				data->screenIndex = 0;
+			}
+		}
 	}
 	
-	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
-
-	SCR_DIRTY_ARG(hnd);
+	data->screenIndex += 1;
+	data->screenIndex %= 254;
+	
 	return 1;
 }
 
@@ -536,6 +572,8 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		case Key2:
 		{
 			ACT_OFST(
+							data->screenIndex = 0;
+							data->itemIndex = 0;
 							TimePlan* p = Timer_GetPrevFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
@@ -545,6 +583,8 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		}
 		case Key3:
 			ACT_OFST(
+							data->screenIndex = 0;
+							data->itemIndex = 0;
 							TimePlan* p = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
@@ -556,7 +596,7 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 			ACT_OFST(
 							g_menuActionsOffset += 4, 
 		
-							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx])
+							//UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx])
 			)
 			break;
 		default:
@@ -780,8 +820,9 @@ void addTimerItemPageInputCallback(void* uih, enum ActionType action)
 					Error_Handler();
 				
 				item->status = data->status;
-				item->time = data->hours * 3600 + data->minutes * 60;
-				UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+				item->hours = data->hours;
+				item->minutes = data->minutes;
+				UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
 			}
 			break;
 		}

@@ -61,10 +61,10 @@ TimePlan* Timer_GetNextFullSlot(TimeList* list, uint8_t start)
 		return NULL;
 
 	uint8_t i;
-	for(i = start; i < MAX_PLANS; i++)
+	for(i = start + 1; i < MAX_PLANS + start + 2; i++)
 	{
-		if (!TimePlan_IsEmpty(&list->plans[i]))
-			return &list->plans[i];
+		if (!TimePlan_IsEmpty(&list->plans[i % MAX_PLANS]))
+			return &list->plans[i % MAX_PLANS];
 	}
 	return NULL;
 }
@@ -75,10 +75,11 @@ TimePlan* Timer_GetPrevFullSlot(TimeList* list, uint8_t start)
 		return NULL;
 
 	int8_t i;
-	for(i = start; i >= 0; i--)
+	for(i = start - 1; i >= start - MAX_PLANS - 2; i--)
 	{
-		if (!TimePlan_IsEmpty(&list->plans[i]))
-			return &list->plans[i];
+		uint8_t idx = i % MAX_PLANS < 0? MAX_PLANS + (i % MAX_PLANS): i % MAX_PLANS;
+		if (!TimePlan_IsEmpty(&list->plans[idx]))
+			return &list->plans[idx];
 	}
 	return NULL;
 }
@@ -133,10 +134,10 @@ TimerItem* TimePlan_GetNextFullSlot(TimePlan* plan, uint8_t start)
 		return NULL;
 
 	uint8_t i;
-	for(i = start; i < MAX_TIMES_PER_DAY; i++)
+	for(i = start + 1; i < MAX_TIMES_PER_DAY + start + 2; i++)
 	{
-		if (!TimerItem_IsEmpty(plan->items[i]))
-			return plan->items[i];
+		if (!TimerItem_IsEmpty(plan->items[i % MAX_TIMES_PER_DAY]))
+			return plan->items[i % MAX_TIMES_PER_DAY];
 	}
 	return NULL;
 }
@@ -147,12 +148,30 @@ TimerItem* TimePlan_GetPrevFullSlot(TimePlan* plan, uint8_t start)
 		return NULL;
 
 	int8_t i;
-	for(i = start; i >= 0; i--)
+	for(i = start - 1; i >= start - MAX_TIMES_PER_DAY - 2; i--)
 	{
-		if (!TimerItem_IsEmpty(plan->items[i]))
-			return plan->items[i];
+		uint8_t idx = i % MAX_TIMES_PER_DAY < 0? MAX_TIMES_PER_DAY + (i % MAX_TIMES_PER_DAY): i % MAX_TIMES_PER_DAY;
+		if (!TimerItem_IsEmpty(plan->items[idx]))
+			return plan->items[idx];
 	}
 	return NULL;
+}
+
+uint8_t TimePlan_ToOffset(TimePlan* plan, TimerItem* item)
+{
+	if (item == NULL)
+		return INVALID_SLOT;
+	
+	uint8_t offset = INVALID_SLOT;
+	uint8_t i;
+	for (i = 0; i < MAX_TIMES_PER_DAY; i++)
+		if (item == plan->items[i])
+		{
+			offset = i;
+			break;
+		}
+	
+	return offset;
 }
 
 uint8_t TimePlan_IsEmpty(TimePlan* plan)
