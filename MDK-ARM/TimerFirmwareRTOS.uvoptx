@@ -152,22 +152,6 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>534</LineNumber>
-          <EnabledFlag>1</EnabledFlag>
-          <Address>134242000</Address>
-          <ByteObject>0</ByteObject>
-          <HtxType>0</HtxType>
-          <ManyObjects>0</ManyObjects>
-          <SizeOfObject>0</SizeOfObject>
-          <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\Core\Src\UserInterface.c</Filename>
-          <ExecCommand></ExecCommand>
-          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\534</Expression>
-        </Bp>
-        <Bp>
-          <Number>1</Number>
-          <Type>0</Type>
           <LineNumber>92</LineNumber>
           <EnabledFlag>1</EnabledFlag>
           <Address>134227908</Address>
@@ -182,11 +166,11 @@
           <Expression>\\TimerFirmwareRTOS\../Core/Src/stm32f1xx_it.c\92</Expression>
         </Bp>
         <Bp>
-          <Number>2</Number>
+          <Number>1</Number>
           <Type>0</Type>
-          <LineNumber>513</LineNumber>
+          <LineNumber>533</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134241872</Address>
+          <Address>134242256</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -195,14 +179,30 @@
           <BreakIfRCount>1</BreakIfRCount>
           <Filename>..\Core\Src\UserInterface.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\513</Expression>
+          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\533</Expression>
+        </Bp>
+        <Bp>
+          <Number>2</Number>
+          <Type>0</Type>
+          <LineNumber>531</LineNumber>
+          <EnabledFlag>1</EnabledFlag>
+          <Address>134242242</Address>
+          <ByteObject>0</ByteObject>
+          <HtxType>0</HtxType>
+          <ManyObjects>0</ManyObjects>
+          <SizeOfObject>0</SizeOfObject>
+          <BreakByAccess>0</BreakByAccess>
+          <BreakIfRCount>1</BreakIfRCount>
+          <Filename>..\Core\Src\UserInterface.c</Filename>
+          <ExecCommand></ExecCommand>
+          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\531</Expression>
         </Bp>
         <Bp>
           <Number>3</Number>
           <Type>0</Type>
-          <LineNumber>529</LineNumber>
+          <LineNumber>514</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134241980</Address>
+          <Address>134242116</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -211,7 +211,7 @@
           <BreakIfRCount>1</BreakIfRCount>
           <Filename>..\Core\Src\UserInterface.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\529</Expression>
+          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\514</Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>

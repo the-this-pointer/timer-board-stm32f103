@@ -299,10 +299,11 @@ void UserInterface_InitPages(UiHandle* uih)
 	/* Init Time List Page And Menus */
 	TimeListPageData* timeListData = malloc(sizeof(TimeListPageData));	
 	timeListData->plan = NULL;
+	timeListData->showingItem = NULL;
 
 	uih->pages[TimeListPageIdx].text = "Time List";
 	uih->pages[TimeListPageIdx].menu = NULL;
-	uih->pages[TimeListPageIdx].actionIcons = "%#$**+- ";
+	uih->pages[TimeListPageIdx].actionIcons = "%#$**+-,";
 	uih->pages[TimeListPageIdx].onInit = timeListPageOnInitCallback;
 	uih->pages[TimeListPageIdx].onUpdate = timeListPageUpdateCallback;
 	uih->pages[TimeListPageIdx].onLeave = NULL;
@@ -310,7 +311,8 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[TimeListPageIdx].data = timeListData;
 
 	/* Add Time Plan Page And Menus */
-	AddTimePlanPageData* addTimePlanData = malloc(sizeof(AddTimePlanPageData));	
+	AddTimePlanPageData* addTimePlanData = malloc(sizeof(AddTimePlanPageData));
+	addTimePlanData->editingPlan = NULL;
 
 	uih->pages[AddTimePlanPageIdx].text = "Time Plan";
 	uih->pages[AddTimePlanPageIdx].menu = NULL;
@@ -322,7 +324,8 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[AddTimePlanPageIdx].data = addTimePlanData;
 
 	/* Add Timer Item Page And Menus */
-	AddTimerItemPageData* addTimerItemData = malloc(sizeof(AddTimerItemPageData));	
+	AddTimerItemPageData* addTimerItemData = malloc(sizeof(AddTimerItemPageData));
+	addTimerItemData->editingItem = NULL;
 
 	uih->pages[AddTimerItemPageIdx].text = "Timer Item";
 	uih->pages[AddTimerItemPageIdx].menu = NULL;
@@ -488,70 +491,69 @@ void timeListPageOnInitCallback(void* uih)
 
 	data->plan = Timer_GetNextFullSlot(&timeList, 0);
 	data->screenIndex = 0;
-	data->itemIndex = MAX_TIMES_PER_DAY+1;
+	data->showingItem = NULL;
 }
-
+// use odd numbers if you don't want a blink between first screen update!
+#define TIME_TO_SHOW_PLAN 5
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
 {
 	if (since < 800)
 		return 0;
 	UiHandle* hnd = uih;
 	TimeListPageData* data = hnd->currentPage->data;
-		
+			
+	ssd1306_Fill(Black);
 	if (data->plan == NULL)
 	{
-		ssd1306_Fill(Black);
-
 		ssd1306_SetCursor(5, 5);
 		ssd1306_WriteString("Empty List!", Font_11x18, White);
-		
-		UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
 		SCR_DIRTY_ARG(hnd);
 	} else {
 		char buff[16] = {0};
-		
-		if (data->screenIndex == 0)	// displays for about 1 second
-		{
-			ssd1306_Fill(Black);
 
-			if (data->plan->mode != Daily)
-				snprintf(buff, 16, "%c: %d", g_timeModes[data->plan->mode], data->plan->day);
-			else
-				snprintf(buff, 16, "%c", g_timeModes[data->plan->mode]);
+		if (data->screenIndex <= TIME_TO_SHOW_PLAN)
+		{
+			switch(data->plan->mode)
+			{
+				case Monthly:
+					snprintf(buff, 16, "%c: %d", g_timeModes[data->plan->mode], data->plan->day);
+					break;
+				case Weekly:
+					snprintf(buff, 16, "%c: %s", g_timeModes[data->plan->mode], g_weekDays[data->plan->day]);
+					break;
+				default:
+					snprintf(buff, 16, "%c", g_timeModes[data->plan->mode]);
+			}
+	
 			ssd1306_SetCursor(5, 5);
 			ssd1306_WriteString(buff, Font_11x18, White);
-
-			UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
-			SCR_DIRTY_ARG(hnd);
 		}
-		else if (data->screenIndex > 1)
+		else if (data->screenIndex % 2 == 0)
 		{
-			TimerItem* item = TimePlan_GetNextFullSlot(data->plan, data->itemIndex);
-			if (item != NULL)
-			{
-				ssd1306_Fill(Black);
+			uint8_t offset = TimePlan_ToOffset(data->plan, data->showingItem);
+			if (offset == INVALID_SLOT)
+				offset = MAX_TIMES_PER_DAY + 1;
 
-				uint8_t offset = TimePlan_ToOffset(data->plan, item);
-				data->itemIndex = offset;
-				
-				snprintf(buff, 16, "%02d:%02d [%s]", item->hours, item->minutes, item->status? "On": "Off");
-				ssd1306_SetCursor(5, 5);
-				ssd1306_WriteString(buff, Font_11x18, White);
-
-				data->screenIndex++;
-
-				UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
-				SCR_DIRTY_ARG(hnd);
-			} else if (data->itemIndex == INVALID_SLOT) {
-				data->itemIndex = MAX_TIMES_PER_DAY+1;
-				data->screenIndex = 0;
-			}
+			data->showingItem = TimePlan_GetNextFullSlot(data->plan, offset);
+		}
+		
+		if (data->screenIndex > TIME_TO_SHOW_PLAN && data->showingItem != NULL)
+		{
+			snprintf(buff, 16, "%02d:%02d [%s]", data->showingItem->hours, data->showingItem->minutes, data->showingItem->status? "On": "Off");
+			ssd1306_SetCursor(5, 5);
+			ssd1306_WriteString(buff, Font_11x18, White);
+		}
+		else if (data->screenIndex > TIME_TO_SHOW_PLAN && data->showingItem == NULL)
+		{
+			data->screenIndex = 0;
+			snprintf(buff, 16, "Nothing!");
 		}
 	}
-	
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	SCR_DIRTY_ARG(hnd);
+
 	data->screenIndex += 1;
 	data->screenIndex %= 254;
-	
 	return 1;
 }
 
@@ -573,10 +575,11 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		{
 			ACT_OFST(
 							data->screenIndex = 0;
-							data->itemIndex = MAX_TIMES_PER_DAY+1;
+							data->showingItem = NULL;
 							TimePlan* p = Timer_GetPrevFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
+							((AddTimePlanPageData*)(hnd->pages[AddTimePlanPageIdx].data))->editingPlan = NULL;
 							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimePlanPageIdx])
 			)
 			break;
@@ -584,7 +587,7 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		case Key3:
 			ACT_OFST(
 							data->screenIndex = 0;
-							data->itemIndex = MAX_TIMES_PER_DAY+1;
+							data->showingItem = NULL;
 							TimePlan* p = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
@@ -596,7 +599,15 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 			ACT_OFST(
 							g_menuActionsOffset += 4, 
 		
-							//UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx])
+							if (data->screenIndex <= TIME_TO_SHOW_PLAN && data->plan) {
+								((AddTimePlanPageData*)(hnd->pages[AddTimePlanPageIdx].data))->editingPlan = data->plan;
+								UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimePlanPageIdx]);
+							}
+							else if (data->screenIndex > TIME_TO_SHOW_PLAN && data->showingItem != NULL)
+							{
+								((AddTimerItemPageData*)(hnd->pages[AddTimerItemPageIdx].data))->editingItem = data->showingItem;
+								UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+							}
 			)
 			break;
 		default:
@@ -610,12 +621,18 @@ void addTimePlanPageOnInitCallback(void* uih)
 	AddTimePlanPageData* data = hnd->currentPage->data;
 
 	data->settingStep = 0;
-	data->plan.day = 0;
-	data->plan.mode = Daily;
-	
-	int i;
-	for (i = 0; i < MAX_TIMES_PER_DAY; i++)
-		TimePlan_RemoveItem(&data->plan, i);
+	if (data->editingPlan == NULL)
+	{
+		data->plan.day = 0;
+		data->plan.mode = Daily;
+		
+		int i;
+		for (i = 0; i < MAX_TIMES_PER_DAY; i++)
+			TimePlan_RemoveItem(&data->plan, i);
+	} else {
+		data->plan.day = data->editingPlan->day;
+		data->plan.mode = data->editingPlan->mode;
+	}
 }
 
 uint8_t addTimePlanPageUpdateCallback(void* uih, uint32_t since)
@@ -705,14 +722,27 @@ void addTimePlanPageInputCallback(void* uih, enum ActionType action)
 			}
 			else
 			{
-				TimePlan* newPlan = Timer_AddPlan(&timeList, data->plan.mode);
-				if (newPlan == NULL)
-					Error_Handler();
-				newPlan->day = data->plan.day+1;
-				
-				AddTimerItemPageData* addItemData = ((UiHandle*)uih)->pages[AddTimerItemPageIdx].data;
-				addItemData->plan = newPlan;
-				UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+				if (data->editingPlan == NULL)
+				{
+					TimePlan* newPlan = Timer_AddPlan(&timeList, data->plan.mode);
+					if (newPlan == NULL)
+					{
+						UserInterface_ShowPopup(uih, "No memory!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+						return;
+					}
+					newPlan->day = data->plan.day + (data->plan.mode == Monthly? 1: 0);
+					
+					AddTimerItemPageData* addItemData = ((UiHandle*)uih)->pages[AddTimerItemPageIdx].data;
+					addItemData->plan = newPlan;
+					addItemData->editingItem = NULL;
+					UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+				}
+				else
+				{
+					data->editingPlan->day = data->plan.day + (data->plan.mode == Monthly? 1: 0);
+					data->editingPlan->mode = data->plan.mode;
+					UserInterface_ShowPopup(uih, "Updated!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+				}
 			}
 			break;
 		}
@@ -727,9 +757,18 @@ void addTimerItemPageOnInitCallback(void* uih)
 	AddTimerItemPageData* data = hnd->currentPage->data;
 
 	data->settingStep = 0;
-	data->hours = 0;
-	data->minutes = 0;
-	data->status = 0;
+	if (data->editingItem == NULL)
+	{
+		data->hours = 0;
+		data->minutes = 0;
+		data->status = 0;
+	}
+	else
+	{
+		data->hours = data->editingItem->hours;
+		data->minutes = data->editingItem->minutes;
+		data->status = data->editingItem->status;
+	}
 }
 
 uint8_t addTimerItemPageUpdateCallback(void* uih, uint32_t since)
@@ -815,14 +854,29 @@ void addTimerItemPageInputCallback(void* uih, enum ActionType action)
 			}
 			else
 			{
-				TimerItem* item = TimePlan_AddItem(data->plan);
-				if (item == NULL)
-					Error_Handler();
-				
-				item->status = data->status;
-				item->hours = data->hours;
-				item->minutes = data->minutes;
-				UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+				if (data->editingItem == NULL)
+				{
+					TimerItem* item = TimePlan_AddItem(data->plan);
+					if (item == NULL)
+					{
+						UserInterface_ShowPopup(uih, "No memory!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+						return;
+					}
+					
+					item->status = data->status;
+					item->hours = data->hours;
+					item->minutes = data->minutes;
+					
+					data->editingItem = NULL;
+					UserInterface_ShowPopup(uih, "Created!", 3, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+				}
+				else
+				{
+					data->editingItem->status = data->status;
+					data->editingItem->hours = data->hours;
+					data->editingItem->minutes = data->minutes;
+					UserInterface_ShowPopup(uih, "Updated!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+				}
 			}
 			break;
 		}

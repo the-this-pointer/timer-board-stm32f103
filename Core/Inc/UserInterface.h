@@ -81,8 +81,8 @@ void mainPageInputCallback(void* uih, enum ActionType action);
 /* Time List */
 typedef struct time_list_data {
 	TimePlan* plan;
+	TimerItem* showingItem;
 	uint8_t screenIndex;
-	uint8_t itemIndex;
 } TimeListPageData;
 void timeListPageOnInitCallback(void* uih);
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since);
@@ -90,6 +90,7 @@ void timeListPageInputCallback(void* uih, enum ActionType action);
 /* Add Time Plan */
 typedef struct add_time_plan_data {
 	TimePlan plan;
+	TimePlan* editingPlan;
 	uint8_t settingStep;
 } AddTimePlanPageData;
 void addTimePlanPageOnInitCallback(void* uih);
@@ -98,6 +99,7 @@ void addTimePlanPageInputCallback(void* uih, enum ActionType action);
 /* Add Timer Item */
 typedef struct add_timer_item_data {
 	TimePlan* plan;
+	TimerItem* editingItem;
 	uint8_t settingStep;	
 	uint8_t hours;
 	uint8_t minutes;

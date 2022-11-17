@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 #define INVALID_SLOT			255
-#define MAX_PLANS					3
-#define MAX_TIMES_PER_DAY	2
+#define MAX_PLANS					10
+#define MAX_TIMES_PER_DAY	8
 
 enum TimeMode {
 	NotAssigned,
