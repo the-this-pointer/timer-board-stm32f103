@@ -306,7 +306,7 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[TimeListPageIdx].actionIcons = "%#$**+-,";
 	uih->pages[TimeListPageIdx].onInit = timeListPageOnInitCallback;
 	uih->pages[TimeListPageIdx].onUpdate = timeListPageUpdateCallback;
-	uih->pages[TimeListPageIdx].onLeave = NULL;
+	uih->pages[TimeListPageIdx].onLeave = timeListPageOnLeaveCallback;
 	uih->pages[TimeListPageIdx].onHandleInput = timeListPageInputCallback;
 	uih->pages[TimeListPageIdx].data = timeListData;
 
@@ -325,6 +325,7 @@ void UserInterface_InitPages(UiHandle* uih)
 
 	/* Add Timer Item Page And Menus */
 	AddTimerItemPageData* addTimerItemData = malloc(sizeof(AddTimerItemPageData));
+	addTimerItemData->plan = NULL;
 	addTimerItemData->editingItem = NULL;
 
 	uih->pages[AddTimerItemPageIdx].text = "Timer Item";
@@ -489,10 +490,18 @@ void timeListPageOnInitCallback(void* uih)
 	UiHandle* hnd = uih;
 	TimeListPageData* data = hnd->currentPage->data;
 
-	data->plan = Timer_GetNextFullSlot(&timeList, 0);
+	Timer_Sort(&timeList);
+	
+	data->plan = Timer_GetNextFullSlot(&timeList, MAX_PLANS);
 	data->screenIndex = 0;
 	data->showingItem = NULL;
 }
+
+void timeListPageOnLeaveCallback(void* uih)
+{
+	Timer_Sort(&timeList);
+}
+
 // use odd numbers if you don't want a blink between first screen update!
 #define TIME_TO_SHOW_PLAN 5
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
@@ -532,7 +541,7 @@ uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
 		{
 			uint8_t offset = TimePlan_ToOffset(data->plan, data->showingItem);
 			if (offset == INVALID_SLOT)
-				offset = MAX_TIMES_PER_DAY + 1;
+				offset = MAX_TIMES_PER_PLAN + 1;
 
 			data->showingItem = TimePlan_GetNextFullSlot(data->plan, offset);
 		}
@@ -546,7 +555,9 @@ uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
 		else if (data->screenIndex > TIME_TO_SHOW_PLAN && data->showingItem == NULL)
 		{
 			data->screenIndex = 0;
-			snprintf(buff, 16, "Nothing!");
+			snprintf(buff, 16, "Nothing Yet!");
+			ssd1306_SetCursor(5, 5);
+			ssd1306_WriteString(buff, Font_11x18, White);
 		}
 	}
 	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
@@ -605,7 +616,14 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 							}
 							else if (data->screenIndex > TIME_TO_SHOW_PLAN && data->showingItem != NULL)
 							{
+								((AddTimerItemPageData*)(hnd->pages[AddTimerItemPageIdx].data))->plan = data->plan;
 								((AddTimerItemPageData*)(hnd->pages[AddTimerItemPageIdx].data))->editingItem = data->showingItem;
+								UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
+							}
+							else if (data->screenIndex > TIME_TO_SHOW_PLAN && data->plan)
+							{
+								((AddTimerItemPageData*)(hnd->pages[AddTimerItemPageIdx].data))->plan = data->plan;
+								((AddTimerItemPageData*)(hnd->pages[AddTimerItemPageIdx].data))->editingItem = NULL;
 								UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
 							}
 			)
@@ -627,10 +645,10 @@ void addTimePlanPageOnInitCallback(void* uih)
 		data->plan.mode = Daily;
 		
 		int i;
-		for (i = 0; i < MAX_TIMES_PER_DAY; i++)
+		for (i = 0; i < MAX_TIMES_PER_PLAN; i++)
 			TimePlan_RemoveItem(&data->plan, i);
 	} else {
-		data->plan.day = data->editingPlan->day;
+		data->plan.day = data->editingPlan->day - (data->editingPlan->mode == Monthly? 1: 0);
 		data->plan.mode = data->editingPlan->mode;
 	}
 }

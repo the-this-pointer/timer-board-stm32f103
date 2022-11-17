@@ -85,6 +85,7 @@ typedef struct time_list_data {
 	uint8_t screenIndex;
 } TimeListPageData;
 void timeListPageOnInitCallback(void* uih);
+void timeListPageOnLeaveCallback(void* uih);
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since);
 void timeListPageInputCallback(void* uih, enum ActionType action);
 /* Add Time Plan */

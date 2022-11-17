@@ -10,7 +10,7 @@ void Timer_TimeListInit(TimeList* list)
 		list->plans[i].mode = NotAssigned;
 		list->plans[i].day = 0;
 		
-		for (j = 0; j < MAX_TIMES_PER_DAY; j++)
+		for (j = 0; j < MAX_TIMES_PER_PLAN; j++)
 			list->plans[i].items[j] = NULL;
 	}
 }
@@ -37,7 +37,7 @@ TimePlan* Timer_AddPlan(TimeList* list, enum TimeMode mode)
 
 	list->plans[slot].mode = mode;
 	list->plans[slot].day	=	0;
-	memset(list->plans[slot].items, 0, sizeof(TimerItem*) * MAX_TIMES_PER_DAY);
+	memset(list->plans[slot].items, 0, sizeof(TimerItem*) * MAX_TIMES_PER_PLAN);
 	
 	return &(list->plans[slot]);
 }
@@ -48,7 +48,7 @@ void Timer_RemovePlan(TimeList* list, uint8_t offset)
 		return;
 
 	int i;
-	for (i = 0; i < MAX_TIMES_PER_DAY; i++)
+	for (i = 0; i < MAX_TIMES_PER_PLAN; i++)
 		TimePlan_RemoveItem(&list->plans[offset], i);
 	
 	list->plans[offset].mode = NotAssigned;
@@ -92,6 +92,22 @@ uint8_t Timer_ToOffset(TimeList* list, TimePlan* plan)
 	return plan - list->plans;
 }
 
+void Timer_Sort(TimeList* list)
+{
+	uint8_t i, j;
+  for (i = 0; i < MAX_PLANS - 1; i++)
+		for (j = 0; j < MAX_PLANS - i - 1; j++)
+			TimePlan_Sort(&list->plans[j]);
+			TimePlan_Sort(&list->plans[j+1]);
+
+			if (TimePlan_Greater(&list->plans[j], &list->plans[j+1]))
+			{
+				TimePlan* lhs = &list->plans[j];
+				TimePlan* rhs = &list->plans[j+1];
+				TimePlan_Swap(&lhs, &rhs);
+			}
+}
+
 TimerItem* TimePlan_AddItem(TimePlan* plan)
 {
 	uint8_t slot = TimePlan_GetEmptySlot(plan);
@@ -110,7 +126,7 @@ TimerItem* TimePlan_AddItem(TimePlan* plan)
 
 void TimePlan_RemoveItem(TimePlan* plan, uint8_t offset)
 {
-	if (offset == INVALID_SLOT || MAX_TIMES_PER_DAY < offset || plan->items[offset] == NULL)
+	if (offset == INVALID_SLOT || MAX_TIMES_PER_PLAN < offset || plan->items[offset] == NULL)
 		return;
 
 	free(plan->items[offset]);
@@ -120,7 +136,7 @@ void TimePlan_RemoveItem(TimePlan* plan, uint8_t offset)
 uint8_t TimePlan_GetEmptySlot(TimePlan* plan)
 {
 	uint8_t i;
-	for(i = 0; i < MAX_TIMES_PER_DAY; i++)
+	for(i = 0; i < MAX_TIMES_PER_PLAN; i++)
 	{
 		if (TimerItem_IsEmpty(plan->items[i]))
 			return i;
@@ -134,10 +150,10 @@ TimerItem* TimePlan_GetNextFullSlot(TimePlan* plan, uint8_t start)
 		return NULL;
 
 	uint8_t i;
-	for(i = start + 1; i < MAX_TIMES_PER_DAY + start + 2; i++)
+	for(i = start + 1; i < MAX_TIMES_PER_PLAN + start + 2; i++)
 	{
-		if (!TimerItem_IsEmpty(plan->items[i % MAX_TIMES_PER_DAY]))
-			return plan->items[i % MAX_TIMES_PER_DAY];
+		if (!TimerItem_IsEmpty(plan->items[i % MAX_TIMES_PER_PLAN]))
+			return plan->items[i % MAX_TIMES_PER_PLAN];
 	}
 	return NULL;
 }
@@ -148,9 +164,9 @@ TimerItem* TimePlan_GetPrevFullSlot(TimePlan* plan, uint8_t start)
 		return NULL;
 
 	int8_t i;
-	for(i = start - 1; i >= start - MAX_TIMES_PER_DAY - 2; i--)
+	for(i = start - 1; i >= start - MAX_TIMES_PER_PLAN - 2; i--)
 	{
-		uint8_t idx = i % MAX_TIMES_PER_DAY < 0? MAX_TIMES_PER_DAY + (i % MAX_TIMES_PER_DAY): i % MAX_TIMES_PER_DAY;
+		uint8_t idx = i % MAX_TIMES_PER_PLAN < 0? MAX_TIMES_PER_PLAN + (i % MAX_TIMES_PER_PLAN): i % MAX_TIMES_PER_PLAN;
 		if (!TimerItem_IsEmpty(plan->items[idx]))
 			return plan->items[idx];
 	}
@@ -164,7 +180,7 @@ uint8_t TimePlan_ToOffset(TimePlan* plan, TimerItem* item)
 	
 	uint8_t offset = INVALID_SLOT;
 	uint8_t i;
-	for (i = 0; i < MAX_TIMES_PER_DAY; i++)
+	for (i = 0; i < MAX_TIMES_PER_PLAN; i++)
 		if (item == plan->items[i])
 		{
 			offset = i;
@@ -174,9 +190,62 @@ uint8_t TimePlan_ToOffset(TimePlan* plan, TimerItem* item)
 	return offset;
 }
 
+void TimePlan_Sort(TimePlan* plan)
+{
+	uint8_t i, j;
+  for (i = 0; i < MAX_TIMES_PER_PLAN - 1; i++)
+		for (j = 0; j < MAX_TIMES_PER_PLAN - i - 1; j++)
+			if (TimerItem_Greater(plan->items[j], plan->items[j+1]))
+				TimerItem_Swap(&plan->items[j], &plan->items[j+1]);
+}
+
+void TimePlan_Swap(TimePlan** a, TimePlan** b)
+{
+	TimePlan* temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+uint8_t TimePlan_Greater(TimePlan* lhs, TimePlan* rhs)
+{
+	uint32_t lhs_val = 0, rhs_val = 0;
+	
+	if (lhs != NULL)
+		lhs_val = (Monthly - lhs->mode) * 60 + (32 - lhs->day);
+	
+	if (rhs != NULL)
+		rhs_val = (Monthly - rhs->mode) * 60 + (32 - rhs->day);
+	
+	if (lhs_val > rhs_val)
+		return 1;
+	return 0;
+}
+
 uint8_t TimePlan_IsEmpty(TimePlan* plan)
 {
 	return plan->mode == NotAssigned;
+}
+
+void TimerItem_Swap(TimerItem** a, TimerItem** b)
+{
+  TimerItem* temp = *a;
+  *a = *b;
+  *b = temp;
+}
+
+uint8_t TimerItem_Greater(TimerItem* lhs, TimerItem* rhs)
+{
+	uint16_t lhs_val = 0, rhs_val = 0;
+	
+	if (lhs != NULL)
+		lhs_val = lhs->hours * 60 + lhs->minutes;
+	
+	if (rhs != NULL)
+		rhs_val = rhs->hours * 60 + rhs->minutes;
+	
+	if (lhs_val > rhs_val)
+		return 1;
+	return 0;
 }
 
 uint8_t TimerItem_IsEmpty(TimerItem* item)
