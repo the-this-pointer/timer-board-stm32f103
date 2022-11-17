@@ -488,7 +488,7 @@ void timeListPageOnInitCallback(void* uih)
 
 	data->plan = Timer_GetNextFullSlot(&timeList, 0);
 	data->screenIndex = 0;
-	data->itemIndex = 0;
+	data->itemIndex = MAX_TIMES_PER_DAY+1;
 }
 
 uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
@@ -543,7 +543,7 @@ uint8_t timeListPageUpdateCallback(void* uih, uint32_t since)
 				UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
 				SCR_DIRTY_ARG(hnd);
 			} else if (data->itemIndex == INVALID_SLOT) {
-				data->itemIndex = 0;
+				data->itemIndex = MAX_TIMES_PER_DAY+1;
 				data->screenIndex = 0;
 			}
 		}
@@ -573,7 +573,7 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		{
 			ACT_OFST(
 							data->screenIndex = 0;
-							data->itemIndex = 0;
+							data->itemIndex = MAX_TIMES_PER_DAY+1;
 							TimePlan* p = Timer_GetPrevFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
@@ -584,7 +584,7 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 		case Key3:
 			ACT_OFST(
 							data->screenIndex = 0;
-							data->itemIndex = 0;
+							data->itemIndex = MAX_TIMES_PER_DAY+1;
 							TimePlan* p = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
 							if(p) data->plan = p, 
 
