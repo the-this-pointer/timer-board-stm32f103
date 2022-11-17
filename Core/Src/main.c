@@ -523,9 +523,12 @@ void StartTimerTask(void const * argument)
 {
   /* USER CODE BEGIN StartTimerTask */
   /* Infinite loop */
+	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
   {
-    osDelay( 1000 );
+		// TODO check if it's time to toggle output or not
+		
+		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000));
   }
   /* USER CODE END StartTimerTask */
 }
