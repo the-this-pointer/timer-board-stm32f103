@@ -492,7 +492,7 @@ void timeListPageOnInitCallback(void* uih)
 
 	Timer_Sort(&timeList);
 	
-	data->plan = Timer_GetNextFullSlot(&timeList, MAX_PLANS);
+	data->plan = TimePlan_IsEmpty(&timeList.plans[0])? Timer_GetNextFullSlot(&timeList, 0): &timeList.plans[0];
 	data->screenIndex = 0;
 	data->showingItem = NULL;
 }

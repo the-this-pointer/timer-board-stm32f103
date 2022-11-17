@@ -6,6 +6,7 @@
 #define INVALID_SLOT				255
 #define MAX_PLANS						10
 #define MAX_TIMES_PER_PLAN	8
+#define UNINIT_STATUS				2
 
 enum TimeMode {
 	NotAssigned,
@@ -17,14 +18,14 @@ enum TimeMode {
 typedef struct timer_item {
 	uint8_t hours;
 	uint8_t minutes;
-	uint8_t  status;
+	uint8_t status;
 } TimerItem;
 
 typedef struct time_plan {
 	enum TimeMode mode;
 	uint8_t day;		// used in monthly and weekly
 
-	TimerItem* items[MAX_TIMES_PER_PLAN];
+	TimerItem items[MAX_TIMES_PER_PLAN];
 } TimePlan;
 
 typedef struct time_list {
@@ -47,11 +48,11 @@ TimerItem* TimePlan_GetNextFullSlot(TimePlan* plan, uint8_t start);
 TimerItem* TimePlan_GetPrevFullSlot(TimePlan* plan, uint8_t start);
 uint8_t TimePlan_ToOffset(TimePlan* plan, TimerItem* item);
 void TimePlan_Sort(TimePlan* plan);
-void TimePlan_Swap(TimePlan** a, TimePlan** b);
+void TimePlan_Swap(TimePlan* a, TimePlan* b);
 uint8_t TimePlan_Greater(TimePlan* lhs, TimePlan* rhs);
 uint8_t TimePlan_IsEmpty(TimePlan* plan);
 
-void TimerItem_Swap(TimerItem** a, TimerItem** b);
+void TimerItem_Swap(TimerItem* a, TimerItem* b);
 uint8_t TimerItem_Greater(TimerItem* lhs, TimerItem* rhs);
 uint8_t TimerItem_IsEmpty(TimerItem* item);
 
