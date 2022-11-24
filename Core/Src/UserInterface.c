@@ -137,13 +137,13 @@ void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, voi
 uint8_t UserInterface_Update(UiHandle* uih, uint32_t since)
 {
 	xSemaphoreTake(lcdMutexHandle, portMAX_DELAY);
+	uint8_t res = 0;
 	if (uih->currentPage && uih->currentPage->onUpdate && uih->screenStatus)
 	{
-		xSemaphoreGive(lcdMutexHandle);
-		return uih->currentPage->onUpdate(uih, since);
+		res = uih->currentPage->onUpdate(uih, since);
 	}
 	xSemaphoreGive(lcdMutexHandle);
-	return 0;
+	return res;
 	// SCR_DIRTY;
 }
 
@@ -162,24 +162,30 @@ void UserInterface_Flush(UiHandle* uih)
 
 void UserInterface_TurnOnScreen(UiHandle* uih)
 {
-	xSemaphoreTake(lcdMutexHandle, portMAX_DELAY);
-	if (uih->screenStatus == 0) 
+	if (xSemaphoreTake(lcdMutexHandle, 0))
 	{
-		uih->screenStatus = 1;
-		UserInterface_ChangePage(uih, &uih->pages[0]);
+		if (uih->screenStatus == 0) 
+		{
+			uih->screenStatus = 1;
+			UserInterface_ChangePage(uih, &uih->pages[0]);
+		}
+		xSemaphoreGive(lcdMutexHandle);
 	}
-	xSemaphoreGive(lcdMutexHandle);
 }
 
 void UserInterface_TurnOffScreen(UiHandle* uih)
 {
-	if (uih->screenStatus == 1) 
+	if (xSemaphoreTake(lcdMutexHandle, 0))
 	{
-		uih->screenStatus = 0;
-		
-		ssd1306_Fill(Black);
-		ssd1306_UpdateScreen(&hi2c1);
-		SCR_DIRTY_CLR;
+		if (uih->screenStatus == 1) 
+		{
+			uih->screenStatus = 0;
+			
+			ssd1306_Fill(Black);
+			ssd1306_UpdateScreen(&hi2c1);
+			SCR_DIRTY_CLR;
+		}
+		xSemaphoreGive(lcdMutexHandle);
 	}
 }
 

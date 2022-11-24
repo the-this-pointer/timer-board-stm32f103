@@ -53,12 +53,10 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+void SetRTCAlarmForNextMinute();
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LED_Pin GPIO_PIN_13
-#define LED_GPIO_Port GPIOC
 #define Output4_Pin GPIO_PIN_1
 #define Output4_GPIO_Port GPIOB
 #define Output3_Pin GPIO_PIN_2

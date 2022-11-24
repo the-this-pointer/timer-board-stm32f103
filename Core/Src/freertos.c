@@ -24,6 +24,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "UserInterface.h"
+#include "cmsis_os.h"
 
 /* USER CODE END Includes */
 
@@ -44,7 +46,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+extern UiHandle uih;
+extern osTimerId sleepTimerHandle;
+extern osMutexId sleepTimerMutexHandle;
+extern uint8_t sleepTimerCallbackExecuted;
 /* USER CODE END Variables */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,12 +66,47 @@ void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer, Stack
 /* USER CODE BEGIN PREPOSTSLEEP */
 __weak void PreSleepProcessing(uint32_t *ulExpectedIdleTime)
 {
-/* place for user code */
+	if (sleepTimerCallbackExecuted == pdFALSE)
+		return;
+
+	if (xSemaphoreTake(sleepTimerMutexHandle, 0))
+	{
+		*ulExpectedIdleTime = 0;
+		
+		UserInterface_TurnOffScreen(&uih);
+		xTimerStop(sleepTimerHandle, 100);
+		
+		HAL_EnableDBGSleepMode();
+		__disable_irq();
+		HAL_SuspendTick();
+		__dsb( portSY_FULL_READ_WRITE );
+		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+		__isb( portSY_FULL_READ_WRITE );
+		HAL_ResumeTick();
+		__enable_irq();
+		HAL_DisableDBGSleepMode();
+
+		/*HAL_SuspendTick();
+		__HAL_RCC_PWR_CLK_ENABLE();
+		HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFE);
+		HAL_ResumeTick();
+		SystemClock_Config();*/
+		
+	} else {
+		xTimerReset(sleepTimerHandle, 100);
+		sleepTimerCallbackExecuted = pdFALSE;
+	}
 }
 
 __weak void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
 {
-/* place for user code */
+	if (sleepTimerCallbackExecuted == pdFALSE)
+		return;
+
+	UserInterface_TurnOnScreen(&uih);
+	xTimerReset(sleepTimerHandle, 100);
+	sleepTimerCallbackExecuted = pdFALSE;
+	xSemaphoreGive(sleepTimerMutexHandle);
 }
 /* USER CODE END PREPOSTSLEEP */
 

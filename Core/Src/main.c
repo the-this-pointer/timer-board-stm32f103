@@ -55,9 +55,11 @@ osThreadId timerTaskHandle;
 osMessageQId inputQueueHandle;
 osTimerId sleepTimerHandle;
 osMutexId lcdMutexHandle;
+osMutexId sleepTimerMutexHandle;
 /* USER CODE BEGIN PV */
 UiHandle uih;
 TimeList timeList;
+uint8_t sleepTimerCallbackExecuted = pdFALSE;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,7 +80,44 @@ void SleepTimerCallback(void const * argument);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef *hrtc)
+{
+  UNUSED(hrtc);
+	SetRTCAlarmForNextMinute();
+}
 
+void SetRTCAlarmForNextMinute()
+{
+	RTC_TimeTypeDef time;
+	RTC_DateTypeDef date;
+	HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+
+	time.Seconds += 60;
+	if(time.Seconds>=60)
+	{
+		time.Minutes++;
+		time.Seconds= time.Seconds -60;
+	}
+	
+	if(time.Minutes >= 60)
+	{
+		time.Hours++;
+		time.Minutes = time.Minutes - 60;
+	}
+	
+	if(time.Hours > 23)
+	{
+		time.Hours = 0;
+	}
+		
+	RTC_AlarmTypeDef sAlarm;
+	sAlarm.Alarm = RTC_ALARM_A;
+	sAlarm.AlarmTime.Hours = time.Hours;
+	sAlarm.AlarmTime.Minutes = time.Minutes;
+	sAlarm.AlarmTime.Seconds = time.Seconds;
+	HAL_RTC_SetAlarm_IT(&hrtc, &sAlarm, RTC_FORMAT_BIN);
+}
 /* USER CODE END 0 */
 
 /**
@@ -125,6 +164,10 @@ int main(void)
   osMutexDef(lcdMutex);
   lcdMutexHandle = osMutexCreate(osMutex(lcdMutex));
 
+  /* definition and creation of sleepTimerMutex */
+  osMutexDef(sleepTimerMutex);
+  sleepTimerMutexHandle = osMutexCreate(osMutex(sleepTimerMutex));
+
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
@@ -139,8 +182,9 @@ int main(void)
   sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
 
   /* USER CODE BEGIN RTOS_TIMERS */
-	xTimerChangePeriod(sleepTimerHandle, 30000 / portTICK_PERIOD_MS, 100);
+	xTimerChangePeriod(sleepTimerHandle, 5000 / portTICK_PERIOD_MS, 100);
 	xTimerStart(sleepTimerHandle, 100);
+	SetRTCAlarmForNextMinute();
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
@@ -390,17 +434,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Output4_Pin|Output3_Pin|Output2_Pin|Output1_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : Output4_Pin Output3_Pin Output2_Pin Output1_Pin */
   GPIO_InitStruct.Pin = Output4_Pin|Output3_Pin|Output2_Pin|Output1_Pin;
@@ -437,6 +471,9 @@ void StartInputTask(void const * argument)
 	uint8_t dataAvailable = 0;
   for(;;)
   {
+		if (xSemaphoreTake(sleepTimerMutexHandle, portMAX_DELAY))
+			xSemaphoreGive(sleepTimerMutexHandle);
+		
 		if (counter > 35)
 			counter = 35;
 		
@@ -496,6 +533,9 @@ void StartUiTask(void const * argument)
 	BaseType_t xResult;
 	for(;;)
   {
+		if (xSemaphoreTake(sleepTimerMutexHandle, portMAX_DELAY))
+			xSemaphoreGive(sleepTimerMutexHandle);
+
     xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(50) );
 		if( xResult == pdPASS )
 		{
@@ -526,7 +566,6 @@ void StartTimerTask(void const * argument)
 	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
   {
-		// TODO check if it's time to toggle output or not
 		
 		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000));
   }
@@ -537,29 +576,8 @@ void StartTimerTask(void const * argument)
 void SleepTimerCallback(void const * argument)
 {
   /* USER CODE BEGIN SleepTimerCallback */
-	UserInterface_TurnOffScreen(&uih);
+	sleepTimerCallbackExecuted = pdTRUE;
   /* USER CODE END SleepTimerCallback */
-}
-
-/**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM1 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
-
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM1) {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
-
-  /* USER CODE END Callback 1 */
 }
 
 /**
