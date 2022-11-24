@@ -474,7 +474,7 @@ void StartInputTask(void const * argument)
 			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
 		}
 
-    osDelay( 100 );
+    vTaskDelay( 100 );
   }
   /* USER CODE END 5 */
 }
@@ -507,7 +507,7 @@ void StartUiTask(void const * argument)
 			xLastUpdateTime = xTaskGetTickCount();
 		
 		UserInterface_Flush(&uih);
-    osDelay( 100 );
+    vTaskDelay( 100 );
   }
   /* USER CODE END StartUiTask */
 }
@@ -526,9 +526,48 @@ void StartTimerTask(void const * argument)
 	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
   {
-		// TODO check if it's time to toggle output or not
+		if (UserInterface_ScreenIsOn(&uih))
+		{
+			vTaskDelay(pdMS_TO_TICKS(5000));
+			continue;
+		}
+
+		RTC_TimeTypeDef sTime = {0};
+		RTC_DateTypeDef sDate = {0};
+
+		if (HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK ||
+			HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			Error_Handler();
+		}
 		
-		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000));
+		uint8_t i, j, outputStatus = 0, maxMode = NotAssigned;
+		uint16_t maxValue = 0, nowValue = sTime.Hours * 60 + sTime.Minutes;
+		
+		for(i = 0; i < MAX_PLANS; i++)
+		{
+			if (TimePlan_IsEmpty(&timeList.plans[i]) || maxMode > timeList.plans[i].mode)
+				continue;
+			TimePlan* plan = &timeList.plans[i];
+			
+			for(j = 0; j < MAX_TIMES_PER_PLAN; j++)
+			{
+				if (TimerItem_IsEmpty(&timeList.plans[i].items[j]))
+					continue;
+				TimerItem* item = &timeList.plans[i].items[j];
+				
+				uint16_t itemValue = item->hours * 60 + item->minutes;
+				if (nowValue >= itemValue && itemValue >= maxValue)
+				{
+					outputStatus = item->status;
+					maxValue = itemValue;
+					maxMode = plan->mode;
+				}
+			}
+		}
+
+		HAL_GPIO_WritePin(Output1_GPIO_Port, Output1_Pin, outputStatus == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000 - (sTime.Seconds * 1000)));
   }
   /* USER CODE END StartTimerTask */
 }

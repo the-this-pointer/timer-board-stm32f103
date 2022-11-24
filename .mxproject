@@ -6,6 +6,9 @@ SourceFiles=..\Core\Src\main.c;..\Core\Src\freertos.c;..\Core\Src\stm32f1xx_it.c
 HeaderPath=..\Drivers\STM32F1xx_HAL_Driver\Inc\Legacy;..\Drivers\STM32F1xx_HAL_Driver\Inc;..\Middlewares\Third_Party\FreeRTOS\Source\include;..\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS;..\Middlewares\Third_Party\FreeRTOS\Source\portable\RVDS\ARM_CM3;..\Drivers\CMSIS\Device\ST\STM32F1xx\Include;..\Drivers\CMSIS\Include;..\Core\Inc;
 CDefines=USE_HAL_DRIVER;STM32F103xB;USE_HAL_DRIVER;USE_HAL_DRIVER;
 
+[]
+SourceFiles=;;
+
 [PreviousGenFiles]
 AdvancedFolderStructure=true
 HeaderFileListSize=4
@@ -25,7 +28,4 @@ SourceFiles#4=C:/Users/reza_/OneDrive/Documents/Projects/Embedded/Timer/TimerFir
 SourceFolderListSize=1
 SourcePath#0=C:/Users/reza_/OneDrive/Documents/Projects/Embedded/Timer/TimerFirmwareRTOS/Core/Src
 SourceFiles=;
-
-[]
-SourceFiles=;;
 

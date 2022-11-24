@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define TEST_ITEMS
+
 void Timer_TimeListInit(TimeList* list)
 {
 	uint8_t i,j;
@@ -17,6 +19,29 @@ void Timer_TimeListInit(TimeList* list)
 			list->plans[i].items[j].status = UNINIT_STATUS;
 		}
 	}
+	
+#ifdef TEST_ITEMS
+	/* Test Data */
+	TimePlan* plan = Timer_AddPlan(list, Daily);
+	if (plan)
+	{
+		TimerItem* item = TimePlan_AddItem(plan);
+		if (item)
+		{
+			item->hours = 0;
+			item->minutes = 0;
+			item->status = 1;
+		}
+		
+		item = TimePlan_AddItem(plan);
+		if (item)
+		{
+			item->hours = 0;
+			item->minutes = 1;
+			item->status = 0;
+		}
+	}
+#endif //TEST_ITEMS
 }
 
 uint8_t Timer_GetEmptySlot(TimeList* list)
