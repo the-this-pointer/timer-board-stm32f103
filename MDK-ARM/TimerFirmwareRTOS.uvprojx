@@ -443,6 +443,11 @@
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32f1xx_hal_timebase_tim.c</FilePath>
             </File>
+            <File>
+              <FileName>eeprom.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Core\Src\eeprom.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -647,6 +652,16 @@
               <FileName>Timer.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\Core\Inc\Timer.h</FilePath>
+            </File>
+            <File>
+              <FileName>eeprom.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\eeprom.h</FilePath>
+            </File>
+            <File>
+              <FileName>global_def.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Core\Inc\global_def.h</FilePath>
             </File>
           </Files>
         </Group>

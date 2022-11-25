@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "UserInterface.h"
 #include "Timer.h"
+#include "eeprom.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,7 +58,8 @@ osTimerId sleepTimerHandle;
 osMutexId lcdMutexHandle;
 /* USER CODE BEGIN PV */
 UiHandle uih;
-TimeList timeList;
+EEPROM_TimeList timeListData;
+TimeList *timeList;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -117,7 +119,9 @@ int main(void)
 	UserInterface_Init(&uih);
 	UserInterface_InitPages(&uih);
 	
-	Timer_TimeListInit(&timeList);
+	// for legacy use
+	timeList = &timeListData.timelist;	
+	Timer_LoadData(&timeListData);
   /* USER CODE END 2 */
 
   /* Create the mutex(es) */
@@ -546,15 +550,15 @@ void StartTimerTask(void const * argument)
 		
 		for(i = 0; i < MAX_PLANS; i++)
 		{
-			if (TimePlan_IsEmpty(&timeList.plans[i]) || maxMode > timeList.plans[i].mode)
+			if (TimePlan_IsEmpty(&timeList->plans[i]) || maxMode > timeList->plans[i].mode)
 				continue;
-			TimePlan* plan = &timeList.plans[i];
+			TimePlan* plan = &timeList->plans[i];
 			
 			for(j = 0; j < MAX_TIMES_PER_PLAN; j++)
 			{
-				if (TimerItem_IsEmpty(&timeList.plans[i].items[j]))
+				if (TimerItem_IsEmpty(&timeList->plans[i].items[j]))
 					continue;
-				TimerItem* item = &timeList.plans[i].items[j];
+				TimerItem* item = &timeList->plans[i].items[j];
 				
 				uint16_t itemValue = item->hours * 60 + item->minutes;
 				if (nowValue >= itemValue && itemValue >= maxValue)

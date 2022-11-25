@@ -11,7 +11,9 @@ extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
 extern osMutexId lcdMutexHandle;
 extern osTimerId sleepTimerHandle;
-extern TimeList timeList;
+extern TimeList* timeList;
+extern EEPROM_TimeList timeListData;
+
 
 uint8_t	g_menuActionsOffset = 0;
 const char* g_menuActionIcons = "%#$!";
@@ -289,7 +291,7 @@ void UserInterface_InitPages(UiHandle* uih)
 	
 	/* Init Main Page */
 	uih->pages[MainPageIdx].text = "Main Page";
-	uih->pages[MainPageIdx].actionIcons = "&  )";
+	uih->pages[MainPageIdx].actionIcons = "& .)";
 	uih->pages[MainPageIdx].onInit = NULL;
 	uih->pages[MainPageIdx].onUpdate = mainPageUpdateCallback;
 	uih->pages[MainPageIdx].onLeave = NULL;
@@ -477,6 +479,10 @@ void mainPageInputCallback(void* uih, enum ActionType action)
 		case Key1:
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
+		case Key3:
+			Timer_SaveData(&timeListData);
+			UserInterface_ShowPopup(uih, "Saved!", 3, &((UiHandle*)uih)->pages[MainPageIdx]);
+			break;
 		case Key4:
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[TimeListPageIdx]);
 			break;
@@ -490,16 +496,16 @@ void timeListPageOnInitCallback(void* uih)
 	UiHandle* hnd = uih;
 	TimeListPageData* data = hnd->currentPage->data;
 
-	Timer_Sort(&timeList);
+	Timer_Sort(timeList);
 	
-	data->plan = TimePlan_IsEmpty(&timeList.plans[0])? Timer_GetNextFullSlot(&timeList, 0): &timeList.plans[0];
+	data->plan = TimePlan_IsEmpty(&timeList->plans[0])? Timer_GetNextFullSlot(timeList, 0): &timeList->plans[0];
 	data->screenIndex = 0;
 	data->showingItem = NULL;
 }
 
 void timeListPageOnLeaveCallback(void* uih)
 {
-	Timer_Sort(&timeList);
+	Timer_Sort(timeList);
 }
 
 // use odd numbers if you don't want a blink between first screen update!
@@ -587,7 +593,7 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 			ACT_OFST(
 							data->screenIndex = 0;
 							data->showingItem = NULL;
-							TimePlan* p = Timer_GetPrevFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
+							TimePlan* p = Timer_GetPrevFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
 							if(p) data->plan = p, 
 
 							((AddTimePlanPageData*)(hnd->pages[AddTimePlanPageIdx].data))->editingPlan = NULL;
@@ -599,11 +605,11 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 			ACT_OFST(
 							data->screenIndex = 0;
 							data->showingItem = NULL;
-							TimePlan* p = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan)); 
+							TimePlan* p = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
 							if(p) data->plan = p, 
 
-							Timer_RemovePlan(&timeList, Timer_ToOffset(&timeList, data->plan)); 
-							data->plan = Timer_GetNextFullSlot(&timeList, Timer_ToOffset(&timeList, data->plan))
+							Timer_RemovePlan(timeList, Timer_ToOffset(timeList, data->plan)); 
+							data->plan = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan))
 			)
 			break;
 		case Key4:
@@ -742,7 +748,7 @@ void addTimePlanPageInputCallback(void* uih, enum ActionType action)
 			{
 				if (data->editingPlan == NULL)
 				{
-					TimePlan* newPlan = Timer_AddPlan(&timeList, data->plan.mode);
+					TimePlan* newPlan = Timer_AddPlan(timeList, data->plan.mode);
 					if (newPlan == NULL)
 					{
 						UserInterface_ShowPopup(uih, "No memory!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);

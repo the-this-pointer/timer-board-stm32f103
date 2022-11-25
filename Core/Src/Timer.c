@@ -1,8 +1,78 @@
 #include "Timer.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
+#include <eeprom.h>
 
-#define TEST_ITEMS
+// #define TEST_ITEMS
+
+uint16_t VirtAddVarTab[256];
+
+void Timer_LoadData(EEPROM_TimeList* timeListData)
+{
+	if (NB_OF_VAR > 256)
+	{
+		// no enough storage!
+		Error_Handler();
+	}
+	
+	timeListData->maxPlans = 0;
+	timeListData->maxTimePerPlan = 0;
+	
+	uint16_t VarIndex;
+	for(VarIndex = 1; VarIndex <= NB_OF_VAR; VarIndex++)
+	{
+		VirtAddVarTab[VarIndex-1] = VarIndex;
+	}
+
+	HAL_FLASH_Unlock();
+	/* EEPROM Init */
+	if( EE_Init() != HAL_OK)
+	{
+	  Error_Handler();
+	}
+
+	
+	uint8_t notLoaded = 0x00;
+	uint16_t* ptr = (uint16_t*)timeListData;
+  uint16_t i = 0;
+	for(i = 0; i < NB_OF_VAR; i++)
+  {
+		if(EE_ReadVariable(VirtAddVarTab[i],  (ptr + i)) != HAL_OK)
+		{
+			notLoaded = 0x01;
+			break;
+		}
+  }
+	
+	/*uint16_t memCounter;
+	for(memCounter = 0; memCounter < NB_OF_VAR; memCounter++)
+		if((EE_ReadVariable(VirtAddVarTab[memCounter],  (uint16_t*)(timeListData+memCounter))) != HAL_OK)
+		{
+			notLoaded = 0x01;
+			break;
+		}*/
+
+	if (notLoaded || timeListData->maxPlans != MAX_PLANS || timeListData->maxTimePerPlan != MAX_TIMES_PER_PLAN)
+	{
+		timeListData->maxPlans = MAX_PLANS;
+		timeListData->maxTimePerPlan = MAX_TIMES_PER_PLAN;
+		Timer_TimeListInit(&timeListData->timelist);
+	}
+}
+
+void Timer_SaveData(EEPROM_TimeList* timeListData)
+{
+	uint16_t* ptr = (uint16_t*)timeListData;
+  uint16_t i = 0;
+  for(i = 0; i < NB_OF_VAR; i++)
+  {
+		if(EE_WriteVariable(VirtAddVarTab[i],  *(ptr + i)) != HAL_OK)
+		{
+			break;
+		}
+  }
+}
 
 void Timer_TimeListInit(TimeList* list)
 {

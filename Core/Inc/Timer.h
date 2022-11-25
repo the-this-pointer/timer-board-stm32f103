@@ -1,36 +1,10 @@
 #ifndef TIMER_H
 #define TIMER_H
 
-#include <stdint.h>
+#include <global_def.h>
 
-#define INVALID_SLOT				255
-#define MAX_PLANS						10
-#define MAX_TIMES_PER_PLAN	8
-#define UNINIT_STATUS				2
-
-enum TimeMode {
-	NotAssigned,
-	Daily,
-	Weekly,
-	Monthly
-};
-
-typedef struct timer_item {
-	uint8_t hours;
-	uint8_t minutes;
-	uint8_t status;
-} TimerItem;
-
-typedef struct time_plan {
-	enum TimeMode mode;
-	uint8_t day;		// used in monthly and weekly
-
-	TimerItem items[MAX_TIMES_PER_PLAN];
-} TimePlan;
-
-typedef struct time_list {
-	TimePlan plans[MAX_PLANS];
-} TimeList;
+void Timer_LoadData(EEPROM_TimeList* timeListData);
+void Timer_SaveData(EEPROM_TimeList* timeListData);
 
 void Timer_TimeListInit(TimeList* list);
 uint8_t Timer_GetEmptySlot(TimeList* list);
@@ -55,5 +29,7 @@ uint8_t TimePlan_IsEmpty(TimePlan* plan);
 void TimerItem_Swap(TimerItem* a, TimerItem* b);
 uint8_t TimerItem_Greater(TimerItem* lhs, TimerItem* rhs);
 uint8_t TimerItem_IsEmpty(TimerItem* item);
+
+void Error_Handler(void);
 
 #endif	//TIMER_H
