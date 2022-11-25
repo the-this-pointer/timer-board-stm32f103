@@ -1,6 +1,7 @@
 #include "UserInterface.h"
 #include "stm32f1xx_hal.h"
 #include "cmsis_os.h"
+#include "eeprom.h"
 #include <string.h>
 
 #define SCR_DIRTY_ARG(uih) uih->screenDirty = 1
@@ -13,6 +14,8 @@ extern osMutexId lcdMutexHandle;
 extern osTimerId sleepTimerHandle;
 extern TimeList* timeList;
 extern EEPROM_TimeList timeListData;
+extern uint16_t VirtAddVarTab[256];
+extern uint16_t sleepTimeMSec;
 
 
 uint8_t	g_menuActionsOffset = 0;
@@ -1100,7 +1103,7 @@ void setSleepTimePageOnInitCallback(void* uih)
 	UiHandle* hnd = uih;
 	SetSleepTimePageData* data = hnd->currentPage->data;
 
-	data->sleepTime = 30;	// set to saved value
+	data->sleepTime = sleepTimeMSec / 1000;
 }
 
 uint8_t setSleepTimePageUpdateCallback(void* uih, uint32_t since)
@@ -1135,20 +1138,24 @@ void setSleepTimePageInputCallback(void* uih, enum ActionType action)
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
 		case Key2:
-			if (data->sleepTime == 0)
-				data->sleepTime = 120;
+			if (data->sleepTime == 6)
+				data->sleepTime = 60;
 			else
 				data->sleepTime--;
 			break;
 		case Key3:
-			if (data->sleepTime == 120)
-				data->sleepTime = 0;
+			if (data->sleepTime == 60)
+				data->sleepTime = 6;
 			else
 				data->sleepTime++;
 			break;
 		case Key4:
-			if (xTimerChangePeriod(sleepTimerHandle, data->sleepTime * 1000 / portTICK_PERIOD_MS, 100) == pdPASS)
+			if (xTimerChangePeriod(sleepTimerHandle, data->sleepTime * 1000 / portTICK_PERIOD_MS, 100) == pdPASS && 
+				EE_WriteVariable(VirtAddVarTab[0],  data->sleepTime * 1000) == HAL_OK)
+			{
+				sleepTimeMSec = data->sleepTime * 1000;
 				UserInterface_ShowPopup(uih, "Time Set!", 3, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			}
 			else
 				Error_Handler();
 			break;

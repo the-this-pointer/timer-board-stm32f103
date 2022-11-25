@@ -6,6 +6,7 @@
 
 // #define TEST_ITEMS
 
+extern uint16_t sleepTimeMSec;
 uint16_t VirtAddVarTab[256];
 
 void Timer_LoadData(EEPROM_TimeList* timeListData)
@@ -32,11 +33,20 @@ void Timer_LoadData(EEPROM_TimeList* timeListData)
 	  Error_Handler();
 	}
 
+	// Read sleep time first!
+	if(EE_ReadVariable(VirtAddVarTab[0],  &sleepTimeMSec) != HAL_OK)
+		sleepTimeMSec = 30000;
+
+	if (sleepTimeMSec < 6000)
+		sleepTimeMSec = 6000;
+	else if (sleepTimeMSec > 60000)
+		sleepTimeMSec = 60000;
 	
+	// Load Timer Data
 	uint8_t notLoaded = 0x00;
 	uint16_t* ptr = (uint16_t*)timeListData;
   uint16_t i = 0;
-	for(i = 0; i < NB_OF_VAR; i++)
+	for(i = 1; i < NB_OF_VAR; i++)	// starts from 1, 0 is for sleep time
   {
 		if(EE_ReadVariable(VirtAddVarTab[i],  (ptr + i)) != HAL_OK)
 		{
@@ -44,14 +54,6 @@ void Timer_LoadData(EEPROM_TimeList* timeListData)
 			break;
 		}
   }
-	
-	/*uint16_t memCounter;
-	for(memCounter = 0; memCounter < NB_OF_VAR; memCounter++)
-		if((EE_ReadVariable(VirtAddVarTab[memCounter],  (uint16_t*)(timeListData+memCounter))) != HAL_OK)
-		{
-			notLoaded = 0x01;
-			break;
-		}*/
 
 	if (notLoaded || timeListData->maxPlans != MAX_PLANS || timeListData->maxTimePerPlan != MAX_TIMES_PER_PLAN)
 	{
@@ -65,7 +67,7 @@ void Timer_SaveData(EEPROM_TimeList* timeListData)
 {
 	uint16_t* ptr = (uint16_t*)timeListData;
   uint16_t i = 0;
-  for(i = 0; i < NB_OF_VAR; i++)
+  for(i = 1; i < NB_OF_VAR; i++)	// starts from 1, 0 is for sleep time
   {
 		if(EE_WriteVariable(VirtAddVarTab[i],  *(ptr + i)) != HAL_OK)
 		{

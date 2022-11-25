@@ -210,7 +210,7 @@
 #define PAGE_FULL             ((uint8_t)0x80)
 
 /* Variables' number */
-#define NB_OF_VAR           	((uint16_t)ceil((double)sizeof(EEPROM_TimeList)/2))
+#define NB_OF_VAR           	((uint16_t)ceil((double)sizeof(EEPROM_TimeList)/2) + 1)	// timer data size + sleep time
 //#define NB_OF_VAR           	((uint8_t)4)
 
 /* Exported types ------------------------------------------------------------*/

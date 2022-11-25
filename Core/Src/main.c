@@ -60,6 +60,7 @@ osMutexId lcdMutexHandle;
 UiHandle uih;
 EEPROM_TimeList timeListData;
 TimeList *timeList;
+uint16_t sleepTimeMSec = 30000;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -143,7 +144,7 @@ int main(void)
   sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
 
   /* USER CODE BEGIN RTOS_TIMERS */
-	xTimerChangePeriod(sleepTimerHandle, 30000 / portTICK_PERIOD_MS, 100);
+	xTimerChangePeriod(sleepTimerHandle, sleepTimeMSec / portTICK_PERIOD_MS, 100);
 	xTimerStart(sleepTimerHandle, 100);
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
@@ -298,30 +299,37 @@ static void MX_RTC_Init(void)
   }
 
   /* USER CODE BEGIN Check_RTC_BKUP */
-
+	if (HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_DR1) != 0x1235)
+  {
   /* USER CODE END Check_RTC_BKUP */
 
-  /** Initialize RTC and set the Time and Date
-  */
-  sTime.Hours = 0x0;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
+		/** Initialize RTC and set the Time and Date
+		*/
+		sTime.Hours = 0x0;
+		sTime.Minutes = 0x0;
+		sTime.Seconds = 0x0;
 
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  DateToUpdate.WeekDay = RTC_WEEKDAY_MONDAY;
-  DateToUpdate.Month = RTC_MONTH_JANUARY;
-  DateToUpdate.Date = 0x1;
-  DateToUpdate.Year = 0x0;
+		if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			Error_Handler();
+		}
+		DateToUpdate.WeekDay = RTC_WEEKDAY_MONDAY;
+		DateToUpdate.Month = RTC_MONTH_JANUARY;
+		DateToUpdate.Date = 0x1;
+		DateToUpdate.Year = 0x0;
 
-  if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN RTC_Init 2 */
+		if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			Error_Handler();
+		}
 
+	/* USER CODE BEGIN RTC_Init 2 */
+		// Write Back Up Register 1 Data
+    HAL_PWR_EnableBkUpAccess();
+    // Writes a data in a RTC Backup data Register 1
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_DR1, 0x1235);
+    HAL_PWR_DisableBkUpAccess();
+	}
   /* USER CODE END RTC_Init 2 */
 
 }
