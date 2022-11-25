@@ -28,6 +28,16 @@ const char* g_weekDays[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 		b; \
 	}
 
+#define ACT_OFST_3(a, b, c) \
+	if (g_menuActionsOffset == 0) \
+	{ \
+		a; \
+	} else if (g_menuActionsOffset == 4) {\
+		b; \
+	} else { \
+		c; \
+	}
+
 
 void UserInterface_Init(UiHandle* uih)
 {
@@ -291,7 +301,7 @@ void UserInterface_InitPages(UiHandle* uih)
 	
 	/* Init Main Page */
 	uih->pages[MainPageIdx].text = "Main Page";
-	uih->pages[MainPageIdx].actionIcons = "& .)";
+	uih->pages[MainPageIdx].actionIcons = "&  )";
 	uih->pages[MainPageIdx].onInit = NULL;
 	uih->pages[MainPageIdx].onUpdate = mainPageUpdateCallback;
 	uih->pages[MainPageIdx].onLeave = NULL;
@@ -305,7 +315,7 @@ void UserInterface_InitPages(UiHandle* uih)
 
 	uih->pages[TimeListPageIdx].text = "Time List";
 	uih->pages[TimeListPageIdx].menu = NULL;
-	uih->pages[TimeListPageIdx].actionIcons = "%#$**+-,";
+	uih->pages[TimeListPageIdx].actionIcons = "%#$**+-**,. ";
 	uih->pages[TimeListPageIdx].onInit = timeListPageOnInitCallback;
 	uih->pages[TimeListPageIdx].onUpdate = timeListPageUpdateCallback;
 	uih->pages[TimeListPageIdx].onLeave = timeListPageOnLeaveCallback;
@@ -479,10 +489,6 @@ void mainPageInputCallback(void* uih, enum ActionType action)
 		case Key1:
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
 			break;
-		case Key3:
-			Timer_SaveData(&timeListData);
-			UserInterface_ShowPopup(uih, "Saved!", 3, &((UiHandle*)uih)->pages[MainPageIdx]);
-			break;
 		case Key4:
 			UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[TimeListPageIdx]);
 			break;
@@ -582,40 +588,25 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 	switch(action)
 	{
 		case Key1:
-			ACT_OFST(
+			ACT_OFST_3(
 							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[MainPageIdx]), 
+		
+							g_menuActionsOffset -= 4,
 		
 							g_menuActionsOffset -= 4
 			)
 			break;
 		case Key2:
 		{
-			ACT_OFST(
+			ACT_OFST_3(
 							data->screenIndex = 0;
 							data->showingItem = NULL;
 							TimePlan* p = Timer_GetPrevFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
 							if(p) data->plan = p, 
 
 							((AddTimePlanPageData*)(hnd->pages[AddTimePlanPageIdx].data))->editingPlan = NULL;
-							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimePlanPageIdx])
-			)
-			break;
-		}
-		case Key3:
-			ACT_OFST(
-							data->screenIndex = 0;
-							data->showingItem = NULL;
-							TimePlan* p = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
-							if(p) data->plan = p, 
-
-							Timer_RemovePlan(timeList, Timer_ToOffset(timeList, data->plan)); 
-							data->plan = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan))
-			)
-			break;
-		case Key4:
-			ACT_OFST(
-							g_menuActionsOffset += 4, 
-		
+							UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimePlanPageIdx]),
+							
 							if (data->screenIndex <= TIME_TO_SHOW_PLAN && data->plan) {
 								((AddTimePlanPageData*)(hnd->pages[AddTimePlanPageIdx].data))->editingPlan = data->plan;
 								UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimePlanPageIdx]);
@@ -632,6 +623,30 @@ void timeListPageInputCallback(void* uih, enum ActionType action)
 								((AddTimerItemPageData*)(hnd->pages[AddTimerItemPageIdx].data))->editingItem = NULL;
 								UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[AddTimerItemPageIdx]);
 							}
+			)
+			break;
+		}
+		case Key3:
+			ACT_OFST_3(
+							data->screenIndex = 0;
+							data->showingItem = NULL;
+							TimePlan* p = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan)); 
+							if(p) data->plan = p, 
+
+							Timer_RemovePlan(timeList, Timer_ToOffset(timeList, data->plan)); 
+							data->plan = Timer_GetNextFullSlot(timeList, Timer_ToOffset(timeList, data->plan)),
+							
+							Timer_SaveData(&timeListData);
+							UserInterface_ShowPopup(uih, "Saved!", 3, &((UiHandle*)uih)->pages[TimeListPageIdx]);
+			)
+			break;
+		case Key4:
+			ACT_OFST_3(
+							g_menuActionsOffset += 4, 
+		
+							g_menuActionsOffset += 4, 
+		
+							;
 			)
 			break;
 		default:
