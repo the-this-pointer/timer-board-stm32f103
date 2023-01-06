@@ -10,13 +10,17 @@
 
 extern I2C_HandleTypeDef hi2c1;
 extern RTC_HandleTypeDef hrtc;
-extern osMutexId lcdMutexHandle;
-extern osTimerId sleepTimerHandle;
 extern TimeList* timeList;
 extern EEPROM_TimeList timeListData;
 extern uint16_t VirtAddVarTab[256];
-extern uint16_t sleepTimeMSec;
 
+uint16_t sleepTimeMSec;
+osThreadId inputTaskHandle;
+osThreadId uiTaskHandle;
+osMessageQId inputQueueHandle;
+osTimerId sleepTimerHandle;
+osMutexId lcdMutexHandle;
+UiHandle uih;
 
 uint8_t	g_menuActionsOffset = 0;
 const char* g_menuActionIcons = "%#$!";
@@ -42,13 +46,36 @@ const char* g_weekDays[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 	}
 
 
-void UserInterface_Init(UiHandle* uih)
+void UserInterface_Init()
 {
 	ssd1306_Init(&hi2c1);
-	uih->currentPage = NULL;
-	uih->currentMenu = NULL;
-	uih->screenDirty = 0;
-	uih->screenStatus = 1;
+	uih.currentPage = NULL;
+	uih.currentMenu = NULL;
+	uih.screenDirty = 0;
+	uih.screenStatus = 1;
+	
+	osMutexDef(lcdMutex);
+  lcdMutexHandle = osMutexCreate(osMutex(lcdMutex));
+
+	// Sleep Timer
+	osTimerDef(sleepTimer, SleepTimerCallback);
+  sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
+	xTimerChangePeriod(sleepTimerHandle, sleepTimeMSec / portTICK_PERIOD_MS, 100);
+	xTimerStart(sleepTimerHandle, 100);
+
+	// Input Queue
+	osMessageQDef(inputQueue, 16, uint16_t);
+  inputQueueHandle = osMessageCreate(osMessageQ(inputQueue), NULL);
+
+	// Input Task
+	osThreadDef(inputTask, StartInputTask, osPriorityNormal, 0, 128);
+  inputTaskHandle = osThreadCreate(osThread(inputTask), NULL);
+
+	// Ui Task
+  osThreadDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128);
+  uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
+
+	UserInterface_InitPages(&uih);
 }
 
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
@@ -438,6 +465,92 @@ void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToS
 	uih->pages[MessagePopupIdx].text = text;
 	UserInterface_ChangePage(uih, &uih->pages[MessagePopupIdx]);
 }
+
+void StartInputTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+	BaseType_t xResult;
+	uint16_t counter = 0;
+	uint16_t value = 0;
+	uint8_t dataAvailable = 0;
+  for(;;)
+  {
+		if (counter > 35)
+			counter = 35;
+		
+		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
+			value = Key1_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
+			value = Key2_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
+			value = Key3_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
+			value = Key4_Pin;
+			dataAvailable = 1;
+		}
+		else if (counter > 0) {
+			counter = 0;
+		}
+		
+		if (dataAvailable)
+		{
+			if (!UserInterface_ScreenIsOn(&uih))
+				UserInterface_TurnOnScreen(&uih);
+			else
+			{
+				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
+				counter += 5;
+			}
+			xTimerReset(sleepTimerHandle, 100);
+			dataAvailable = 0;
+			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
+		}
+
+    vTaskDelay( 100 );
+  }
+  /* USER CODE END 5 */
+}
+
+void StartUiTask(void const * argument)
+{
+  /* USER CODE BEGIN StartUiTask */
+  /* Infinite loop */
+	TickType_t xLastUpdateTime = xTaskGetTickCount();
+	TickType_t xNow = xTaskGetTickCount();
+	uint16_t xReceivedInput;
+	BaseType_t xResult;
+	for(;;)
+  {
+    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(50) );
+		if( xResult == pdPASS )
+		{
+			UserInterface_HandleInput(&uih, xReceivedInput);
+		}
+		xNow = xTaskGetTickCount();
+		
+		if (UserInterface_Update(&uih, xNow - xLastUpdateTime))
+			xLastUpdateTime = xTaskGetTickCount();
+		
+		UserInterface_Flush(&uih);
+    vTaskDelay( 100 );
+  }
+  /* USER CODE END StartUiTask */
+}
+
+void SleepTimerCallback(void const * argument)
+{
+  /* USER CODE BEGIN SleepTimerCallback */
+	UserInterface_TurnOffScreen(&uih);
+  /* USER CODE END SleepTimerCallback */
+}
+
 
 uint8_t mainPageUpdateCallback(void* uih, uint32_t since)
 {

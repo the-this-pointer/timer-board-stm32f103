@@ -50,7 +50,7 @@ typedef struct {
 	uint8_t screenStatus;
 } UiHandle;
 
-void UserInterface_Init(UiHandle* uih);
+void UserInterface_Init();
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page);
 void UserInterface_HandleInput(UiHandle* uih, uint16_t input);
 void UserInterface_InitMenu(UiMenuPtr menu, const char* caption, void* prev, void* next, void* parent, void* parentPage, void* page, void* children, menuCallback callback);
@@ -65,6 +65,11 @@ void UserInterface_p_DrawMenu(UiHandle* uih);
 void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action);
 void UserInterface_p_DrawActions(const char* actions);
 
+// Tasks
+void StartInputTask(void const * argument);
+void StartUiTask(void const * argument);
+void SleepTimerCallback(void const * argument);
+
 
 // Ui Callbacks
 enum Pages {
@@ -72,6 +77,7 @@ enum Pages {
 	SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, 
 	MaxPages
 };
+extern UiHandle uih;
 
 void UserInterface_InitPages(UiHandle* uih);
 void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToShow, UiPagePtr fallbackPage);
