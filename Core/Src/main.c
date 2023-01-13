@@ -23,12 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Timer.h"
-#if SET_TIMER_MODE == SET_TIMER_MODE_UI
 #include "UserInterface.h"
-#endif
-#if SAVE_TIME_MODE == SAVE_TIME_MODE_EE
 #include "eeprom.h"
-#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,10 +43,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
-RTC_HandleTypeDef hrtc;
-UART_HandleTypeDef huart1;
-osThreadId timerTaskHandle;
 
+RTC_HandleTypeDef hrtc;
+
+UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
+
+osThreadId timerTaskHandle;
 /* USER CODE BEGIN PV */
 EEPROM_TimeList timeListData;
 TimeList *timeList;
@@ -61,6 +60,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
 void StartTimerTask(void const * argument);
 
@@ -101,32 +101,32 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_I2C1_Init();
   MX_RTC_Init();
+  MX_DMA_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-	#if SET_TIMER_MODE == SET_TIMER_MODE_UI
-	  MX_I2C1_Init();
-		UserInterface_Init();
-	#elif SET_TIMER_MODE == SET_TIMER_MODE_UART
-	  MX_USART1_UART_Init();
-	#endif
+  MX_I2C1_Init();
+  UserInterface_Init();
+  MX_USART1_UART_Init();
 	
 	// for legacy use
 	timeList = &timeListData.timelist;	
 	Timer_LoadData(&timeListData);
   /* USER CODE END 2 */
 
-  /* Create the mutex(es) */
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
+
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
-  /* Create the timer(s) */
+
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
-  /* Create the queue(s) */
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -201,7 +201,6 @@ void SystemClock_Config(void)
   }
 }
 
-#if SET_TIMER_MODE == SET_TIMER_MODE_UI
 /**
   * @brief I2C1 Initialization Function
   * @param None
@@ -235,9 +234,6 @@ static void MX_I2C1_Init(void)
   /* USER CODE END I2C1_Init 2 */
 
 }
-#endif
-	
-
 
 /**
   * @brief RTC Initialization Function
@@ -302,7 +298,6 @@ static void MX_RTC_Init(void)
 
 }
 
-#if SET_TIMER_MODE == SET_TIMER_MODE_UART
 /**
   * @brief USART1 Initialization Function
   * @param None
@@ -335,7 +330,22 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE END USART1_Init 2 */
 
 }
-#endif
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
+
+}
 
 /**
   * @brief GPIO Initialization Function
@@ -383,9 +393,16 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 /* USER CODE END 4 */
 
+/* USER CODE BEGIN Header_StartTimerTask */
+/**
+* @brief Function implementing the timerTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTimerTask */
 void StartTimerTask(void const * argument)
 {
-  /* USER CODE BEGIN StartTimerTask */
+  /* USER CODE BEGIN 5 */
   /* Infinite loop */
 	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
@@ -435,7 +452,7 @@ void StartTimerTask(void const * argument)
 		HAL_GPIO_WritePin(Output1_GPIO_Port, Output1_Pin, outputStatus == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000 - (sTime.Seconds * 1000)));
   }
-  /* USER CODE END StartTimerTask */
+  /* USER CODE END 5 */
 }
 
 /**
