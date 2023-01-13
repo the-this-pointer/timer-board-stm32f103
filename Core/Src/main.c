@@ -53,6 +53,7 @@ osThreadId timerTaskHandle;
 /* USER CODE BEGIN PV */
 EEPROM_TimeList timeListData;
 TimeList *timeList;
+uint8_t timerEnabled = 0x01;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,9 +107,7 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  MX_I2C1_Init();
   UserInterface_Init();
-  MX_USART1_UART_Init();
 	
 	// for legacy use
 	timeList = &timeListData.timelist;	
@@ -407,13 +406,11 @@ void StartTimerTask(void const * argument)
 	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
   {
-	#if SETTING_MODE == SETTING_MODE_UI
-		if (UserInterface_ScreenIsOn(&uih))
+		if (timerEnabled == 0x00 || UserInterface_ScreenIsOn(&uih))
 		{
 			vTaskDelay(pdMS_TO_TICKS(5000));
 			continue;
 		}
-	#endif
 
 		RTC_TimeTypeDef sTime = {0};
 		RTC_DateTypeDef sDate = {0};

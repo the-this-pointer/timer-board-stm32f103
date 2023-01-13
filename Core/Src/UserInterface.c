@@ -4,15 +4,21 @@
 #include "eeprom.h"
 #include <string.h>
 
+#define UART_BUFF_SIZE	128
+#define UART_START_PACKET   0x1B
+#define UART_START_PACKET_2 0x1B
+
 #define SCR_DIRTY_ARG(uih) uih->screenDirty = 1
 #define SCR_DIRTY uih->screenDirty = 1
 #define SCR_DIRTY_CLR uih->screenDirty = 0
 
 extern I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef huart1;
 extern RTC_HandleTypeDef hrtc;
 extern TimeList* timeList;
 extern EEPROM_TimeList timeListData;
 extern uint16_t VirtAddVarTab[256];
+extern uint8_t timerEnabled;
 
 uint16_t sleepTimeMSec;
 osThreadId inputTaskHandle;
@@ -22,6 +28,7 @@ osTimerId sleepTimerHandle;
 osMutexId lcdMutexHandle;
 UiHandle uih;
 
+uint8_t g_uart_rx[UART_BUFF_SIZE];
 uint8_t	g_menuActionsOffset = 0;
 const char* g_menuActionIcons = "%#$!";
 const char* g_timeModes = " DWM";
@@ -76,6 +83,15 @@ void UserInterface_Init()
   uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
 
 	UserInterface_InitPages(&uih);
+	
+	/* Start receiving data */
+  if(HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE) != HAL_OK)
+  {        
+	  Error_Handler();
+  }
+    
+  /* Disable Half Transfer Interrupt */
+  __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
 }
 
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
@@ -474,8 +490,53 @@ void StartInputTask(void const * argument)
 	uint16_t counter = 0;
 	uint16_t value = 0;
 	uint8_t dataAvailable = 0;
+	uint8_t rxDataCount = 0;
   for(;;)
   {
+		// reading settings from uart
+		/**
+		* packet is something like:
+		* byte 0..1: packet start bytes (hardcoded values)
+		* byte 2: packet size [limited by 8-bits minus start packets and size bytes (3)], more than this limit will be ignored!
+		*/
+
+		rxDataCount = UART_BUFF_SIZE - huart1.hdmarx->Instance->CNDTR;
+		if (rxDataCount > 3 && g_uart_rx[0] == UART_START_PACKET && g_uart_rx[1] == UART_START_PACKET_2)
+		{
+			uint8_t resetDma = 0x00;
+			uint8_t packetSize = g_uart_rx[2];
+			if (packetSize > rxDataCount + 3)
+			{
+				// the whole packet not received yet, or maybe maximmum bytes received by dma!
+				if (rxDataCount == UART_BUFF_SIZE)
+				{
+					// packet is larger than the buffer and we are unable to get the rest of data, just ignore data and start over
+					resetDma = 0x01;
+				}
+				/**
+				*else
+				*{
+				*	wait for the rest of data
+				*}
+				*/
+			}
+			else
+			{
+				resetDma = 0x01;
+				processUartCommand((const char*)(g_uart_rx + 3), rxDataCount);
+			}
+			
+			if (resetDma)
+			{
+				HAL_UART_DMAStop(&huart1);
+				HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+				resetDma = 0x00;
+			}
+		}
+		
+		// end reading settings from uart
+		
+		
 		if (counter > 35)
 			counter = 35;
 		
@@ -1306,3 +1367,26 @@ void messagePopupInputCallback(void* uih, enum ActionType action)
 	UserInterface_ChangePage(uih, data->fallbackPage);
 }
 
+/* void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) 
+{
+  // if we receive bytes more than the buffer size, we will ignore them unless we may loose them...
+  // HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+} */
+
+void processUartCommand(const char* data, uint8_t length)
+{
+	if (length < 4)
+		return;
+	
+	if (memcmp(data, "hlt;", 4) == 0)
+	{
+		// stop timer task (but outputs stay active with last values)
+		timerEnabled = 0x00;
+	}
+	else if (memcmp(data, "stt;", 4) == 0)
+	{
+		// start timer task
+		timerEnabled = 0x01;
+	}
+	
+}

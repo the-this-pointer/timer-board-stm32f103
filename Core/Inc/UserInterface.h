@@ -145,4 +145,5 @@ void messagePopupOnInitCallback(void* uih);
 uint8_t messagePopupUpdateCallback(void* uih, uint32_t since);
 void messagePopupInputCallback(void* uih, enum ActionType action);
 
+void processUartCommand(const char* data, uint8_t length);
 #endif	// USERINTERFACE_H
