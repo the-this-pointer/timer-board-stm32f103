@@ -4,20 +4,31 @@
 #include "eeprom.h"
 #include <string.h>
 
+#define UART_BUFF_SIZE	128
+#define UART_START_PACKET   0x1B
+#define UART_START_PACKET_2 0x1B
+
 #define SCR_DIRTY_ARG(uih) uih->screenDirty = 1
 #define SCR_DIRTY uih->screenDirty = 1
 #define SCR_DIRTY_CLR uih->screenDirty = 0
 
 extern I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef huart1;
 extern RTC_HandleTypeDef hrtc;
-extern osMutexId lcdMutexHandle;
-extern osTimerId sleepTimerHandle;
 extern TimeList* timeList;
 extern EEPROM_TimeList timeListData;
 extern uint16_t VirtAddVarTab[256];
-extern uint16_t sleepTimeMSec;
+extern uint8_t timerEnabled;
 
+uint16_t sleepTimeMSec;
+osThreadId inputTaskHandle;
+osThreadId uiTaskHandle;
+osMessageQId inputQueueHandle;
+osTimerId sleepTimerHandle;
+osMutexId lcdMutexHandle;
+UiHandle uih;
 
+uint8_t g_uart_rx[UART_BUFF_SIZE];
 uint8_t	g_menuActionsOffset = 0;
 const char* g_menuActionIcons = "%#$!";
 const char* g_timeModes = " DWM";
@@ -42,13 +53,45 @@ const char* g_weekDays[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 	}
 
 
-void UserInterface_Init(UiHandle* uih)
+void UserInterface_Init()
 {
 	ssd1306_Init(&hi2c1);
-	uih->currentPage = NULL;
-	uih->currentMenu = NULL;
-	uih->screenDirty = 0;
-	uih->screenStatus = 1;
+	uih.currentPage = NULL;
+	uih.currentMenu = NULL;
+	uih.screenDirty = 0;
+	uih.screenStatus = 1;
+	
+	osMutexDef(lcdMutex);
+  lcdMutexHandle = osMutexCreate(osMutex(lcdMutex));
+
+	// Sleep Timer
+	osTimerDef(sleepTimer, SleepTimerCallback);
+  sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
+	xTimerChangePeriod(sleepTimerHandle, sleepTimeMSec / portTICK_PERIOD_MS, 100);
+	xTimerStart(sleepTimerHandle, 100);
+
+	// Input Queue
+	osMessageQDef(inputQueue, 16, uint16_t);
+  inputQueueHandle = osMessageCreate(osMessageQ(inputQueue), NULL);
+
+	// Input Task
+	osThreadDef(inputTask, StartInputTask, osPriorityNormal, 0, 128);
+  inputTaskHandle = osThreadCreate(osThread(inputTask), NULL);
+
+	// Ui Task
+  osThreadDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128);
+  uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
+
+	UserInterface_InitPages(&uih);
+	
+	/* Start receiving data */
+  if(HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE) != HAL_OK)
+  {        
+	  Error_Handler();
+  }
+    
+  /* Disable Half Transfer Interrupt */
+  __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
 }
 
 void UserInterface_ChangePage(UiHandle* uih, UiPagePtr page)
@@ -438,6 +481,137 @@ void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToS
 	uih->pages[MessagePopupIdx].text = text;
 	UserInterface_ChangePage(uih, &uih->pages[MessagePopupIdx]);
 }
+
+void StartInputTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+	BaseType_t xResult;
+	uint16_t counter = 0;
+	uint16_t value = 0;
+	uint8_t dataAvailable = 0;
+	uint8_t rxDataCount = 0;
+  for(;;)
+  {
+		// reading settings from uart
+		/**
+		* packet is something like:
+		* byte 0..1: packet start bytes (hardcoded values)
+		* byte 2: packet size [limited by 8-bits minus start packets and size bytes (3)], more than this limit will be ignored!
+		*/
+
+		rxDataCount = UART_BUFF_SIZE - huart1.hdmarx->Instance->CNDTR;
+		if (rxDataCount > 3 && g_uart_rx[0] == UART_START_PACKET && g_uart_rx[1] == UART_START_PACKET_2)
+		{
+			uint8_t resetDma = 0x00;
+			uint8_t packetSize = g_uart_rx[2];
+			if (packetSize > rxDataCount + 3)
+			{
+				// the whole packet not received yet, or maybe maximmum bytes received by dma!
+				if (rxDataCount == UART_BUFF_SIZE)
+				{
+					// packet is larger than the buffer and we are unable to get the rest of data, just ignore data and start over
+					resetDma = 0x01;
+				}
+				/**
+				*else
+				*{
+				*	wait for the rest of data
+				*}
+				*/
+			}
+			else
+			{
+				resetDma = 0x01;
+				processUartCommand((const char*)(g_uart_rx + 3), rxDataCount);
+			}
+			
+			if (resetDma)
+			{
+				HAL_UART_DMAStop(&huart1);
+				HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+				resetDma = 0x00;
+			}
+		}
+		
+		// end reading settings from uart
+		
+		
+		if (counter > 35)
+			counter = 35;
+		
+		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
+			value = Key1_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
+			value = Key2_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
+			value = Key3_Pin;
+			dataAvailable = 1;
+		}
+		else if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
+			value = Key4_Pin;
+			dataAvailable = 1;
+		}
+		else if (counter > 0) {
+			counter = 0;
+		}
+		
+		if (dataAvailable)
+		{
+			if (!UserInterface_ScreenIsOn(&uih))
+				UserInterface_TurnOnScreen(&uih);
+			else
+			{
+				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
+				counter += 5;
+			}
+			xTimerReset(sleepTimerHandle, 100);
+			dataAvailable = 0;
+			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
+		}
+
+    vTaskDelay( 100 );
+  }
+  /* USER CODE END 5 */
+}
+
+void StartUiTask(void const * argument)
+{
+  /* USER CODE BEGIN StartUiTask */
+  /* Infinite loop */
+	TickType_t xLastUpdateTime = xTaskGetTickCount();
+	TickType_t xNow = xTaskGetTickCount();
+	uint16_t xReceivedInput;
+	BaseType_t xResult;
+	for(;;)
+  {
+    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(50) );
+		if( xResult == pdPASS )
+		{
+			UserInterface_HandleInput(&uih, xReceivedInput);
+		}
+		xNow = xTaskGetTickCount();
+		
+		if (UserInterface_Update(&uih, xNow - xLastUpdateTime))
+			xLastUpdateTime = xTaskGetTickCount();
+		
+		UserInterface_Flush(&uih);
+    vTaskDelay( 100 );
+  }
+  /* USER CODE END StartUiTask */
+}
+
+void SleepTimerCallback(void const * argument)
+{
+  /* USER CODE BEGIN SleepTimerCallback */
+	UserInterface_TurnOffScreen(&uih);
+  /* USER CODE END SleepTimerCallback */
+}
+
 
 uint8_t mainPageUpdateCallback(void* uih, uint32_t since)
 {
@@ -1193,3 +1367,26 @@ void messagePopupInputCallback(void* uih, enum ActionType action)
 	UserInterface_ChangePage(uih, data->fallbackPage);
 }
 
+/* void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) 
+{
+  // if we receive bytes more than the buffer size, we will ignore them unless we may loose them...
+  // HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+} */
+
+void processUartCommand(const char* data, uint8_t length)
+{
+	if (length < 4)
+		return;
+	
+	if (memcmp(data, "hlt;", 4) == 0)
+	{
+		// stop timer task (but outputs stay active with last values)
+		timerEnabled = 0x00;
+	}
+	else if (memcmp(data, "stt;", 4) == 0)
+	{
+		// start timer task
+		timerEnabled = 0x01;
+	}
+	
+}

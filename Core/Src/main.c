@@ -22,8 +22,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "UserInterface.h"
 #include "Timer.h"
+#include "UserInterface.h"
 #include "eeprom.h"
 /* USER CODE END Includes */
 
@@ -47,18 +47,13 @@ I2C_HandleTypeDef hi2c1;
 RTC_HandleTypeDef hrtc;
 
 UART_HandleTypeDef huart1;
+DMA_HandleTypeDef hdma_usart1_rx;
 
-osThreadId inputTaskHandle;
-osThreadId uiTaskHandle;
 osThreadId timerTaskHandle;
-osMessageQId inputQueueHandle;
-osTimerId sleepTimerHandle;
-osMutexId lcdMutexHandle;
 /* USER CODE BEGIN PV */
-UiHandle uih;
 EEPROM_TimeList timeListData;
 TimeList *timeList;
-uint16_t sleepTimeMSec = 30000;
+uint8_t timerEnabled = 0x01;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,11 +61,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
-void StartInputTask(void const * argument);
-void StartUiTask(void const * argument);
 void StartTimerTask(void const * argument);
-void SleepTimerCallback(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -111,20 +104,15 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   MX_RTC_Init();
+  MX_DMA_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-	UserInterface_Init(&uih);
-	UserInterface_InitPages(&uih);
+  UserInterface_Init();
 	
 	// for legacy use
 	timeList = &timeListData.timelist;	
 	Timer_LoadData(&timeListData);
   /* USER CODE END 2 */
-
-  /* Create the mutex(es) */
-  /* definition and creation of lcdMutex */
-  osMutexDef(lcdMutex);
-  lcdMutexHandle = osMutexCreate(osMutex(lcdMutex));
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -134,35 +122,15 @@ int main(void)
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
 
-  /* Create the timer(s) */
-  /* definition and creation of sleepTimer */
-  osTimerDef(sleepTimer, SleepTimerCallback);
-  sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
-
   /* USER CODE BEGIN RTOS_TIMERS */
-	xTimerChangePeriod(sleepTimerHandle, sleepTimeMSec / portTICK_PERIOD_MS, 100);
-	xTimerStart(sleepTimerHandle, 100);
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
-
-  /* Create the queue(s) */
-  /* definition and creation of inputQueue */
-  osMessageQDef(inputQueue, 16, uint16_t);
-  inputQueueHandle = osMessageCreate(osMessageQ(inputQueue), NULL);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of inputTask */
-  osThreadDef(inputTask, StartInputTask, osPriorityNormal, 0, 128);
-  inputTaskHandle = osThreadCreate(osThread(inputTask), NULL);
-
-  /* definition and creation of uiTask */
-  osThreadDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128);
-  uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
-
   /* definition and creation of timerTask */
   osThreadDef(timerTask, StartTimerTask, osPriorityHigh, 0, 128);
   timerTaskHandle = osThreadCreate(osThread(timerTask), NULL);
@@ -299,26 +267,26 @@ static void MX_RTC_Init(void)
   {
   /* USER CODE END Check_RTC_BKUP */
 
-  /** Initialize RTC and set the Time and Date
-  */
-  sTime.Hours = 0x0;
-  sTime.Minutes = 0x0;
-  sTime.Seconds = 0x0;
+		/** Initialize RTC and set the Time and Date
+		*/
+		sTime.Hours = 0x0;
+		sTime.Minutes = 0x0;
+		sTime.Seconds = 0x0;
 
-  if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  DateToUpdate.WeekDay = RTC_WEEKDAY_MONDAY;
-  DateToUpdate.Month = RTC_MONTH_JANUARY;
-  DateToUpdate.Date = 0x1;
-  DateToUpdate.Year = 0x0;
+		if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			Error_Handler();
+		}
+		DateToUpdate.WeekDay = RTC_WEEKDAY_MONDAY;
+		DateToUpdate.Month = RTC_MONTH_JANUARY;
+		DateToUpdate.Date = 0x1;
+		DateToUpdate.Year = 0x0;
 
-  if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN RTC_Init 2 */
+		if (HAL_RTC_SetDate(&hrtc, &DateToUpdate, RTC_FORMAT_BCD) != HAL_OK)
+		{
+			Error_Handler();
+		}
+		/* USER CODE BEGIN RTC_Init 2 */
 		// Write Back Up Register 1 Data
     HAL_PWR_EnableBkUpAccess();
     // Writes a data in a RTC Backup data Register 1
@@ -359,6 +327,22 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 
 }
 
@@ -408,98 +392,6 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartInputTask */
-/**
-  * @brief  Function implementing the inputTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartInputTask */
-void StartInputTask(void const * argument)
-{
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-	BaseType_t xResult;
-	uint16_t counter = 0;
-	uint16_t value = 0;
-	uint8_t dataAvailable = 0;
-  for(;;)
-  {
-		if (counter > 35)
-			counter = 35;
-		
-		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
-			value = Key1_Pin;
-			dataAvailable = 1;
-		}
-		else if (HAL_GPIO_ReadPin(Key2_GPIO_Port, Key2_Pin) == GPIO_PIN_SET) {
-			value = Key2_Pin;
-			dataAvailable = 1;
-		}
-		else if (HAL_GPIO_ReadPin(Key3_GPIO_Port, Key3_Pin) == GPIO_PIN_SET) {
-			value = Key3_Pin;
-			dataAvailable = 1;
-		}
-		else if (HAL_GPIO_ReadPin(Key4_GPIO_Port, Key4_Pin) == GPIO_PIN_SET) {
-			value = Key4_Pin;
-			dataAvailable = 1;
-		}
-		else if (counter > 0) {
-			counter = 0;
-		}
-		
-		if (dataAvailable)
-		{
-			if (!UserInterface_ScreenIsOn(&uih))
-				UserInterface_TurnOnScreen(&uih);
-			else
-			{
-				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
-				counter += 5;
-			}
-			xTimerReset(sleepTimerHandle, 100);
-			dataAvailable = 0;
-			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
-		}
-
-    vTaskDelay( 100 );
-  }
-  /* USER CODE END 5 */
-}
-
-/* USER CODE BEGIN Header_StartUiTask */
-/**
-* @brief Function implementing the uiTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartUiTask */
-void StartUiTask(void const * argument)
-{
-  /* USER CODE BEGIN StartUiTask */
-  /* Infinite loop */
-	TickType_t xLastUpdateTime = xTaskGetTickCount();
-	TickType_t xNow = xTaskGetTickCount();
-	uint16_t xReceivedInput;
-	BaseType_t xResult;
-	for(;;)
-  {
-    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(50) );
-		if( xResult == pdPASS )
-		{
-			UserInterface_HandleInput(&uih, xReceivedInput);
-		}
-		xNow = xTaskGetTickCount();
-		
-		if (UserInterface_Update(&uih, xNow - xLastUpdateTime))
-			xLastUpdateTime = xTaskGetTickCount();
-		
-		UserInterface_Flush(&uih);
-    vTaskDelay( 100 );
-  }
-  /* USER CODE END StartUiTask */
-}
-
 /* USER CODE BEGIN Header_StartTimerTask */
 /**
 * @brief Function implementing the timerTask thread.
@@ -509,12 +401,12 @@ void StartUiTask(void const * argument)
 /* USER CODE END Header_StartTimerTask */
 void StartTimerTask(void const * argument)
 {
-  /* USER CODE BEGIN StartTimerTask */
+  /* USER CODE BEGIN 5 */
   /* Infinite loop */
 	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
   {
-		if (UserInterface_ScreenIsOn(&uih))
+		if (timerEnabled == 0x00 || UserInterface_ScreenIsOn(&uih))
 		{
 			vTaskDelay(pdMS_TO_TICKS(5000));
 			continue;
@@ -557,15 +449,7 @@ void StartTimerTask(void const * argument)
 		HAL_GPIO_WritePin(Output1_GPIO_Port, Output1_Pin, outputStatus == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000 - (sTime.Seconds * 1000)));
   }
-  /* USER CODE END StartTimerTask */
-}
-
-/* SleepTimerCallback function */
-void SleepTimerCallback(void const * argument)
-{
-  /* USER CODE BEGIN SleepTimerCallback */
-	UserInterface_TurnOffScreen(&uih);
-  /* USER CODE END SleepTimerCallback */
+  /* USER CODE END 5 */
 }
 
 /**
