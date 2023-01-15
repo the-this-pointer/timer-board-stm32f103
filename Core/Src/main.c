@@ -53,7 +53,7 @@ osThreadId timerTaskHandle;
 /* USER CODE BEGIN PV */
 EEPROM_TimeList timeListData;
 TimeList *timeList;
-uint8_t timerEnabled = 0x01;
+uint8_t g_timerEnabled = 0x01;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -406,7 +406,7 @@ void StartTimerTask(void const * argument)
 	TickType_t lastWakeUpTime = xTaskGetTickCount();
   for(;;)
   {
-		if (timerEnabled == 0x00 || UserInterface_ScreenIsOn(&uih))
+		if (g_timerEnabled == 0x00 || UserInterface_ScreenIsOn(&uih))
 		{
 			vTaskDelay(pdMS_TO_TICKS(5000));
 			continue;

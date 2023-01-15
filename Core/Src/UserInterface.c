@@ -18,7 +18,7 @@ extern RTC_HandleTypeDef hrtc;
 extern TimeList* timeList;
 extern EEPROM_TimeList timeListData;
 extern uint16_t VirtAddVarTab[256];
-extern uint8_t timerEnabled;
+extern uint8_t g_timerEnabled;
 
 uint16_t sleepTimeMSec;
 osThreadId inputTaskHandle;
@@ -27,6 +27,7 @@ osMessageQId inputQueueHandle;
 osTimerId sleepTimerHandle;
 osMutexId lcdMutexHandle;
 UiHandle uih;
+uint8_t g_uartSelectedPlan = INVALID_PLAN;
 
 uint8_t g_uart_rx[UART_BUFF_SIZE];
 uint8_t	g_menuActionsOffset = 0;
@@ -532,6 +533,9 @@ void StartInputTask(void const * argument)
 				HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
 				resetDma = 0x00;
 			}
+			
+			vTaskDelay( 10 );
+			continue;
 		}
 		
 		// end reading settings from uart
@@ -1381,12 +1385,47 @@ void processUartCommand(const char* data, uint8_t length)
 	if (memcmp(data, "hlt;", 4) == 0)
 	{
 		// stop timer task (but outputs stay active with last values)
-		timerEnabled = 0x00;
+		g_timerEnabled = 0x00;
 	}
 	else if (memcmp(data, "stt;", 4) == 0)
 	{
 		// start timer task
-		timerEnabled = 0x01;
+		g_timerEnabled = 0x01;
 	}
-	
+	else if (memcmp(data, "clr;", 4) == 0)
+	{
+		// clear all items
+		Timer_TimeListInit(timeList);
+	}
+	else if (memcmp(data, "set;", 4) == 0)
+	{
+		// save all items
+		Timer_SaveData(&timeListData);
+	}
+	else if (memcmp(data, "pln:", 4) == 0)
+	{
+		// select plan by index
+		g_uartSelectedPlan = (uint8_t)data[4];
+		if (g_uartSelectedPlan >= MAX_PLANS)
+			g_uartSelectedPlan = INVALID_PLAN;
+	}
+	else if (memcmp(data, "tmr:", 4) == 0)
+	{
+		// timer item number and properties
+		if (g_uartSelectedPlan == INVALID_PLAN)
+			return;
+		
+		uint8_t timerItemIdx = data[4];
+		if (timerItemIdx >= MAX_TIMES_PER_PLAN)
+			return;
+		
+		uint8_t hours, minutes, status;
+		hours = data[5];
+		minutes = data[6];
+		status = data[7];
+		
+		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].hours = hours;
+		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].minutes = minutes;
+		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].status = status;
+	}
 }
