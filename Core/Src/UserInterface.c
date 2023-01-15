@@ -1382,25 +1382,30 @@ void processUartCommand(const char* data, uint8_t length)
 	if (length < 4)
 		return;
 	
+	uint8_t handled = 0x00;
 	if (memcmp(data, "hlt;", 4) == 0)
 	{
 		// stop timer task (but outputs stay active with last values)
 		g_timerEnabled = 0x00;
+		handled = 0x01;
 	}
 	else if (memcmp(data, "stt;", 4) == 0)
 	{
 		// start timer task
 		g_timerEnabled = 0x01;
+		handled = 0x01;
 	}
 	else if (memcmp(data, "clr;", 4) == 0)
 	{
 		// clear all items
 		Timer_TimeListInit(timeList);
+		handled = 0x01;
 	}
 	else if (memcmp(data, "set;", 4) == 0)
 	{
 		// save all items
 		Timer_SaveData(&timeListData);
+		handled = 0x01;
 	}
 	else if (memcmp(data, "pln:", 4) == 0)
 	{
@@ -1408,16 +1413,17 @@ void processUartCommand(const char* data, uint8_t length)
 		g_uartSelectedPlan = (uint8_t)data[4];
 		if (g_uartSelectedPlan >= MAX_PLANS)
 			g_uartSelectedPlan = INVALID_PLAN;
+		handled = 0x01;
 	}
 	else if (memcmp(data, "tmr:", 4) == 0)
 	{
 		// timer item number and properties
 		if (g_uartSelectedPlan == INVALID_PLAN)
-			return;
+			goto send_response;
 		
 		uint8_t timerItemIdx = data[4];
 		if (timerItemIdx >= MAX_TIMES_PER_PLAN)
-			return;
+			goto send_response;
 		
 		uint8_t hours, minutes, status;
 		hours = data[5];
@@ -1427,5 +1433,12 @@ void processUartCommand(const char* data, uint8_t length)
 		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].hours = hours;
 		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].minutes = minutes;
 		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].status = status;
+		handled = 0x01;
 	}
+	
+	send_response:
+	if (handled)
+		HAL_UART_Transmit(&huart1, (uint8_t*)"ack;", 4, 10);
+	else
+		HAL_UART_Transmit(&huart1, (uint8_t*)"rej;", 4, 10);
 }
