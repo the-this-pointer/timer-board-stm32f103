@@ -74,7 +74,8 @@ void SleepTimerCallback(void const * argument);
 // Ui Callbacks
 enum Pages {
 	MainPageIdx, TimeListPageIdx, AddTimePlanPageIdx, AddTimerItemPageIdx,
-	SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, MessagePopupIdx, 
+	SettingPageIdx, SetTimePageIdx, SetSleepTimePageIdx, SendTimesPageIdx,
+	MessagePopupIdx, 
 	MaxPages
 };
 extern UiHandle uih;
@@ -135,6 +136,13 @@ typedef struct set_sleep_time_data {
 void setSleepTimePageOnInitCallback(void* uih);
 uint8_t setSleepTimePageUpdateCallback(void* uih, uint32_t since);
 void setSleepTimePageInputCallback(void* uih, enum ActionType action);
+/* Send Times */
+typedef struct send_times_data {
+	uint8_t canceled;
+} SendTimesPageData;
+void sendTimesPageOnInitCallback(void* uih);
+uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since);
+void sendTimesPageInputCallback(void* uih, enum ActionType action);
 /* Message Popup */
 typedef struct message_popup_data {
 	uint8_t secondsToShow;

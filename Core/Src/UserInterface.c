@@ -27,7 +27,6 @@ osMessageQId inputQueueHandle;
 osTimerId sleepTimerHandle;
 osMutexId lcdMutexHandle;
 UiHandle uih;
-uint8_t g_uartSelectedPlan = INVALID_PLAN;
 
 uint8_t g_uart_rx[UART_BUFF_SIZE];
 uint8_t	g_menuActionsOffset = 0;
@@ -397,16 +396,18 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[AddTimerItemPageIdx].data = addTimerItemData;
 
 	/* Init Settings Page And Menus */
-	enum settingMenuTypes {
+	enum SettingMenuTypes {
 		MNU_SET_TIME = 0x00,
 		MNU_SLP_TIME,
+		MNU_SND_TIMES,
 		MNU_CNT
 	};
 	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * MNU_CNT);
 	if (!settingMenus)
 		return;
 	UserInterface_InitMenu(&settingMenus[MNU_SET_TIME], "Time", 					NULL, &settingMenus[MNU_SLP_TIME], NULL, &uih->pages[SettingPageIdx], &uih->pages[SetTimePageIdx], NULL, NULL);
-	UserInterface_InitMenu(&settingMenus[MNU_SLP_TIME], "Sleep Time", 		&settingMenus[MNU_SET_TIME], NULL, NULL, &uih->pages[SettingPageIdx], &uih->pages[SetSleepTimePageIdx], NULL, NULL);
+	UserInterface_InitMenu(&settingMenus[MNU_SLP_TIME], "Sleep Time", 		&settingMenus[MNU_SET_TIME], &settingMenus[MNU_SND_TIMES], NULL, &uih->pages[SettingPageIdx], &uih->pages[SetSleepTimePageIdx], NULL, NULL);
+	UserInterface_InitMenu(&settingMenus[MNU_SND_TIMES],"Send Times", 		&settingMenus[MNU_SLP_TIME], NULL, NULL, &uih->pages[SettingPageIdx], &uih->pages[SendTimesPageIdx], NULL, NULL);
 	
 	uih->pages[SettingPageIdx].text = "Settings";
 	uih->pages[SettingPageIdx].menu = settingMenus;
@@ -455,6 +456,19 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[SetSleepTimePageIdx].onLeave = NULL;
 	uih->pages[SetSleepTimePageIdx].onHandleInput = setSleepTimePageInputCallback;
 	uih->pages[SetSleepTimePageIdx].data = setSleepTimeData;
+
+	/* Init Send Times Page And Data */
+
+	SendTimesPageData* sendTimesData = malloc(sizeof(sendTimesData));
+	sendTimesData->canceled = 0;
+
+	uih->pages[SendTimesPageIdx].text = NULL;
+	uih->pages[SendTimesPageIdx].actionIcons = "%('!";
+	uih->pages[SendTimesPageIdx].onInit = sendTimesPageOnInitCallback;
+	uih->pages[SendTimesPageIdx].onUpdate = sendTimesPageUpdateCallback;
+	uih->pages[SendTimesPageIdx].onLeave = NULL;
+	uih->pages[SendTimesPageIdx].onHandleInput = sendTimesPageInputCallback;
+	uih->pages[SendTimesPageIdx].data = sendTimesData;
 
 	/* Init Message Popup And Data */
 	
@@ -597,7 +611,7 @@ void StartUiTask(void const * argument)
 	BaseType_t xResult;
 	for(;;)
   {
-    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(50) );
+    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(5) );
 		if( xResult == pdPASS )
 		{
 			UserInterface_HandleInput(&uih, xReceivedInput);
@@ -1346,6 +1360,44 @@ void setSleepTimePageInputCallback(void* uih, enum ActionType action)
 	}
 }
 
+void sendTimesPageOnInitCallback(void* uih)
+{
+	UiHandle* hnd = uih;
+	SendTimesPageData* data = hnd->currentPage->data;
+	
+	data->canceled = 0x00;
+}
+
+uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
+{
+	if (since < 400)
+		return 0;
+
+}
+
+void sendTimesPageInputCallback(void* uih, enum ActionType action)
+{
+	UiHandle* hnd = uih;
+	SendTimesPageData* data = hnd->currentPage->data;
+
+	switch(action)
+	{
+		case Key1:
+			data->canceled = 0x01;
+			// handle returning to settings after proper cancellation
+			// UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			break;
+		case Key2:
+			break;
+		case Key3:
+			break;
+		case Key4:
+			break;
+		default:
+			break;
+	}
+}
+
 void messagePopupOnInitCallback(void* uih)
 {
 	UiHandle* hnd = uih;
@@ -1411,32 +1463,16 @@ void processUartCommand(const char* data, uint8_t length)
 		Timer_SaveData(&timeListData);
 		handled = 0x01;
 	}
-	else if (memcmp(data, "pln:", 4) == 0)
+	else if (memcmp(data, "dta:", 4) == 0)
 	{
-		// select plan by index
-		g_uartSelectedPlan = (uint8_t)data[4];
-		if (g_uartSelectedPlan >= MAX_PLANS)
-			g_uartSelectedPlan = INVALID_PLAN;
-		handled = 0x01;
-	}
-	else if (memcmp(data, "tmr:", 4) == 0)
-	{
-		// timer item number and properties
-		if (g_uartSelectedPlan == INVALID_PLAN)
-			goto send_response;
+		// chunk of data received
 		
-		uint8_t timerItemIdx = data[4];
-		if (timerItemIdx >= MAX_TIMES_PER_PLAN)
-			goto send_response;
+		uint8_t offset, count;
+		offset = data[5];
+		count = data[6];
 		
-		uint8_t hours, minutes, status;
-		hours = data[5];
-		minutes = data[6];
-		status = data[7];
+		// TODO: copy to timelist data...
 		
-		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].hours = hours;
-		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].minutes = minutes;
-		timeList->plans[g_uartSelectedPlan].items[timerItemIdx].status = status;
 		handled = 0x01;
 	}
 	
