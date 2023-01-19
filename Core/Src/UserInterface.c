@@ -90,7 +90,7 @@ void UserInterface_Init()
   {        
 	  Error_Handler();
   }
-    
+
   /* Disable Half Transfer Interrupt */
   __HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
 }
@@ -397,12 +397,16 @@ void UserInterface_InitPages(UiHandle* uih)
 	uih->pages[AddTimerItemPageIdx].data = addTimerItemData;
 
 	/* Init Settings Page And Menus */
-	
-	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * 2);
+	enum settingMenuTypes {
+		MNU_SET_TIME = 0x00,
+		MNU_SLP_TIME,
+		MNU_CNT
+	};
+	UiMenuPtr settingMenus = (UiMenuPtr)malloc(sizeof(UiMenu) * MNU_CNT);
 	if (!settingMenus)
 		return;
-	UserInterface_InitMenu(&settingMenus[0], "Time", 					NULL, &settingMenus[1], NULL, &uih->pages[SettingPageIdx], &uih->pages[SetTimePageIdx], NULL, NULL);
-	UserInterface_InitMenu(&settingMenus[1], "Sleep Time", 		&settingMenus[0], NULL, NULL, &uih->pages[SettingPageIdx], &uih->pages[SetSleepTimePageIdx], NULL, NULL);
+	UserInterface_InitMenu(&settingMenus[MNU_SET_TIME], "Time", 					NULL, &settingMenus[MNU_SLP_TIME], NULL, &uih->pages[SettingPageIdx], &uih->pages[SetTimePageIdx], NULL, NULL);
+	UserInterface_InitMenu(&settingMenus[MNU_SLP_TIME], "Sleep Time", 		&settingMenus[MNU_SET_TIME], NULL, NULL, &uih->pages[SettingPageIdx], &uih->pages[SetSleepTimePageIdx], NULL, NULL);
 	
 	uih->pages[SettingPageIdx].text = "Settings";
 	uih->pages[SettingPageIdx].menu = settingMenus;
@@ -420,7 +424,7 @@ void UserInterface_InitPages(UiHandle* uih)
 	{
 		Error_Handler();
 	}
-		
+
 	RTC_DateTypeDef *sDate = malloc(sizeof(RTC_DateTypeDef));
 	if (HAL_RTC_GetDate(&hrtc, sDate, RTC_FORMAT_BCD) != HAL_OK)
 	{

@@ -43,17 +43,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
-
 RTC_HandleTypeDef hrtc;
-
 UART_HandleTypeDef huart1;
 DMA_HandleTypeDef hdma_usart1_rx;
-
-osThreadId timerTaskHandle;
 /* USER CODE BEGIN PV */
-EEPROM_TimeList timeListData;
-TimeList *timeList;
-uint8_t g_timerEnabled = 0x01;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,7 +56,6 @@ static void MX_I2C1_Init(void);
 static void MX_RTC_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART1_UART_Init(void);
-void StartTimerTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -108,10 +100,7 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   UserInterface_Init();
-	
-	// for legacy use
-	timeList = &timeListData.timelist;	
-	Timer_LoadData(&timeListData);
+  Timer_Init();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -131,10 +120,6 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of timerTask */
-  osThreadDef(timerTask, StartTimerTask, osPriorityHigh, 0, 128);
-  timerTaskHandle = osThreadCreate(osThread(timerTask), NULL);
-
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -391,66 +376,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_StartTimerTask */
-/**
-* @brief Function implementing the timerTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTimerTask */
-void StartTimerTask(void const * argument)
-{
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-	TickType_t lastWakeUpTime = xTaskGetTickCount();
-  for(;;)
-  {
-		if (g_timerEnabled == 0x00 || UserInterface_ScreenIsOn(&uih))
-		{
-			vTaskDelay(pdMS_TO_TICKS(5000));
-			continue;
-		}
-
-		RTC_TimeTypeDef sTime = {0};
-		RTC_DateTypeDef sDate = {0};
-
-		if (HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK ||
-			HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-		{
-			Error_Handler();
-		}
-		
-		uint8_t i, j, outputStatus = 0, maxMode = NotAssigned;
-		uint16_t maxValue = 0, nowValue = sTime.Hours * 60 + sTime.Minutes;
-		
-		for(i = 0; i < MAX_PLANS; i++)
-		{
-			if (TimePlan_IsEmpty(&timeList->plans[i]) || maxMode > timeList->plans[i].mode)
-				continue;
-			TimePlan* plan = &timeList->plans[i];
-			
-			for(j = 0; j < MAX_TIMES_PER_PLAN; j++)
-			{
-				if (TimerItem_IsEmpty(&timeList->plans[i].items[j]))
-					continue;
-				TimerItem* item = &timeList->plans[i].items[j];
-				
-				uint16_t itemValue = item->hours * 60 + item->minutes;
-				if (nowValue >= itemValue && itemValue >= maxValue)
-				{
-					outputStatus = item->status;
-					maxValue = itemValue;
-					maxMode = plan->mode;
-				}
-			}
-		}
-
-		HAL_GPIO_WritePin(Output1_GPIO_Port, Output1_Pin, outputStatus == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
-		vTaskDelayUntil(&lastWakeUpTime, pdMS_TO_TICKS(60000 - (sTime.Seconds * 1000)));
-  }
-  /* USER CODE END 5 */
-}
 
 /**
   * @brief  Period elapsed callback in non blocking mode

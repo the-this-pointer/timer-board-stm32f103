@@ -3,6 +3,9 @@
 
 #include <global_def.h>
 
+void Timer_Init();
+void StartTimerTask(void const * argument);
+
 void Timer_LoadData(EEPROM_TimeList* timeListData);
 void Timer_SaveData(EEPROM_TimeList* timeListData);
 
