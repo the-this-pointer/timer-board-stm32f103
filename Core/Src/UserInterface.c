@@ -524,7 +524,7 @@ void StartInputTask(void const * argument)
 		{
 			uint8_t resetDma = 0x00;
 			uint8_t packetSize = g_uart_rx[2];
-			if (packetSize > rxDataCount + 3)
+			if (packetSize > rxDataCount - 3)
 			{
 				// the whole packet not received yet, or maybe maximmum bytes received by dma!
 				if (rxDataCount == UART_BUFF_SIZE)
@@ -542,7 +542,7 @@ void StartInputTask(void const * argument)
 			else
 			{
 				resetDma = 0x01;
-				processUartCommand((const char*)(g_uart_rx + 3), rxDataCount);
+				processUartCommand((const char*)(g_uart_rx + 3), rxDataCount - 3);
 			}
 			
 			if (resetDma)
@@ -552,7 +552,7 @@ void StartInputTask(void const * argument)
 				resetDma = 0x00;
 			}
 			
-			vTaskDelay( 10 );
+			vTaskDelay( 1 );
 			continue;
 		}
 		
@@ -1373,6 +1373,16 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 	if (since < 400)
 		return 0;
 
+	/**
+	* Sending time to other devices has this steps:
+	* 1.cmp;
+	* 2.hlt;
+	* 3.clr;
+	* 4.multiple dta; s...
+	* 5.set;
+	* 6.stt;
+	* In every step, there is a change of rejection in receiver side which will fail the remaining process.
+	*/
 }
 
 void sendTimesPageInputCallback(void* uih, enum ActionType action)
@@ -1433,6 +1443,46 @@ void messagePopupInputCallback(void* uih, enum ActionType action)
   // HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
 } */
 
+uint8_t sendUartCommand(const char* cmd, void* data, uint8_t length)
+{
+	uint8_t buff[5] = {0};
+	buff[0] = UART_START_PACKET;
+	buff[1] = UART_START_PACKET_2;
+	buff[2] = strlen(cmd) + length;
+	
+	// send command header first
+	HAL_UART_Transmit(&huart1, buff, 3, 100);
+	// send the payload
+	HAL_UART_Transmit(&huart1, (uint8_t*)cmd, strlen(cmd), 100);
+	if (data != NULL && length > 0)
+		HAL_UART_Transmit(&huart1, (uint8_t*)data, length, 100);
+	// wait for response from receiver
+	HAL_UART_Receive(&huart1, buff, 4, 1000);
+	return memcmp(buff, "ack;", 4);
+}
+
+uint8_t sendUartCommandChunked(const char* cmd, void* data, uint16_t length)
+{
+	uint16_t offset = 0x00;
+	// maximum payload length we can send in chunked format
+	uint8_t maxPayloadLen = UART_BUFF_SIZE - 3 - strlen(cmd) - 2; // 3 => size of header, 2 => offset and length bytes
+	
+	while (offset < length)
+	{
+		uint8_t dataToSendLen = (length - offset > maxPayloadLen)? maxPayloadLen: length - offset;
+		
+		memset(g_uart_rx, 0x00, UART_BUFF_SIZE);
+		g_uart_rx[0] = offset;
+		g_uart_rx[1] = dataToSendLen;
+		memcpy(g_uart_rx, data + offset, dataToSendLen);
+		uint8_t res = sendUartCommand(cmd, g_uart_rx, dataToSendLen);
+		if (res != 0x00)
+			return res;
+		offset += dataToSendLen;
+	}
+	return 0x00;
+}
+
 void processUartCommand(const char* data, uint8_t length)
 {
 	if (length < 4)
@@ -1463,20 +1513,33 @@ void processUartCommand(const char* data, uint8_t length)
 		Timer_SaveData(&timeListData);
 		handled = 0x01;
 	}
+	else if (memcmp(data, "cmp:", 4) == 0)
+	{
+		// check if we have compatibility with setter device
+		uint8_t maxPlans, maxTimesPerPlan, uartBuffSize;
+		maxPlans = data[5];
+		maxTimesPerPlan = data[6];
+		uartBuffSize = data[7];
+
+		if (uartBuffSize != UART_BUFF_SIZE || maxPlans != MAX_PLANS || maxTimesPerPlan == MAX_TIMES_PER_PLAN)
+			goto send_response;
+		
+		handled = 0x01;
+	}
 	else if (memcmp(data, "dta:", 4) == 0)
 	{
 		// chunk of data received
 		
-		uint8_t offset, count;
+		uint8_t offset, len;
 		offset = data[5];
-		count = data[6];
-		
-		// TODO: copy to timelist data...
-		
+		len = data[6];
+		if (len >= length)
+			goto send_response;
+		memcpy(&timeListData + offset, data + 6, len);
 		handled = 0x01;
 	}
 	
-	send_response:
+send_response:
 	if (handled)
 		HAL_UART_Transmit(&huart1, (uint8_t*)"ack;", 4, 10);
 	else

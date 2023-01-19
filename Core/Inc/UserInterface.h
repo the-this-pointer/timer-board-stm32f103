@@ -153,5 +153,7 @@ void messagePopupOnInitCallback(void* uih);
 uint8_t messagePopupUpdateCallback(void* uih, uint32_t since);
 void messagePopupInputCallback(void* uih, enum ActionType action);
 
+uint8_t sendUartCommand(const char* cmd, void* data, uint8_t length);
+uint8_t sendUartCommandChunked(const char* cmd, void* data, uint16_t length);
 void processUartCommand(const char* data, uint8_t length);
 #endif	// USERINTERFACE_H
