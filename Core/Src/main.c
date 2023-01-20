@@ -25,6 +25,7 @@
 #include "Timer.h"
 #include "UserInterface.h"
 #include "eeprom.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -101,6 +102,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   UserInterface_Init();
   Timer_Init();
+	HAL_UART_Transmit(&huart1, (uint8_t*)"Hi from Timer!", strlen("Hi from Timer!"), 100);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */

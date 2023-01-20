@@ -555,6 +555,12 @@ void StartInputTask(void const * argument)
 			vTaskDelay( 1 );
 			continue;
 		}
+		else if (rxDataCount > 3 && (g_uart_rx[0] != UART_START_PACKET || g_uart_rx[1] != UART_START_PACKET_2))
+		{
+			// if we get garbage, just ignore received data.
+			HAL_UART_DMAStop(&huart1);
+			HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+		}
 		
 		// end reading settings from uart
 		
