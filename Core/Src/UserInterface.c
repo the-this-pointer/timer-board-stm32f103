@@ -21,11 +21,25 @@ extern uint16_t VirtAddVarTab[256];
 extern uint8_t g_timerEnabled;
 
 uint16_t sleepTimeMSec;
+
 osThreadId inputTaskHandle;
+uint32_t inputTaskBuffer[ 128 ];
+osStaticThreadDef_t inputTaskControlBlock;
+
 osThreadId uiTaskHandle;
+uint32_t uiTaskBuffer[ 128 ];
+osStaticThreadDef_t uiTaskControlBlock;
+
 osMessageQId inputQueueHandle;
+uint8_t inputQueueBuffer[ 10 * sizeof( uint16_t ) ];
+osStaticMessageQDef_t inputQueueControlBlock;
+
 osTimerId sleepTimerHandle;
+osStaticTimerDef_t sleepTimerControlBlock;
+
 osMutexId lcdMutexHandle;
+osStaticMutexDef_t lcdMutexControlBlock;
+
 UiHandle uih;
 
 uint8_t g_uart_rx[UART_BUFF_SIZE];
@@ -61,25 +75,23 @@ void UserInterface_Init()
 	uih.screenDirty = 0;
 	uih.screenStatus = 1;
 	
-	osMutexDef(lcdMutex);
+	osMutexStaticDef(lcdMutex, &lcdMutexControlBlock);
   lcdMutexHandle = osMutexCreate(osMutex(lcdMutex));
 
 	// Sleep Timer
-	osTimerDef(sleepTimer, SleepTimerCallback);
+	osTimerStaticDef(sleepTimer, SleepTimerCallback, &sleepTimerControlBlock);
   sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
 	xTimerChangePeriod(sleepTimerHandle, sleepTimeMSec / portTICK_PERIOD_MS, 100);
 	xTimerStart(sleepTimerHandle, 100);
 
 	// Input Queue
-	osMessageQDef(inputQueue, 16, uint16_t);
+	osMessageQStaticDef(inputQueue, 16, uint16_t, inputQueueBuffer, &inputQueueControlBlock);
   inputQueueHandle = osMessageCreate(osMessageQ(inputQueue), NULL);
 
-	// Input Task
-	osThreadDef(inputTask, StartInputTask, osPriorityNormal, 0, 128);
+	osThreadStaticDef(inputTask, StartInputTask, osPriorityNormal, 0, 128, inputTaskBuffer, &inputTaskControlBlock);
   inputTaskHandle = osThreadCreate(osThread(inputTask), NULL);
 
-	// Ui Task
-  osThreadDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128);
+	osThreadStaticDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128, uiTaskBuffer, &uiTaskControlBlock);
   uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
 
 	UserInterface_InitPages(&uih);

@@ -12,6 +12,8 @@ extern uint16_t sleepTimeMSec;
 uint16_t VirtAddVarTab[256];
 
 osThreadId timerTaskHandle;
+uint32_t timerTaskBuffer[ 128 ];
+osStaticThreadDef_t timerTaskControlBlock;
 
 EEPROM_TimeList timeListData;
 TimeList *timeList;
@@ -24,8 +26,8 @@ void Timer_Init()
 	Timer_LoadData(&timeListData);
 	
 #ifdef DEVICE_MODE_TIMER
-	/* definition and creation of timerTask */
-  osThreadDef(timerTask, StartTimerTask, osPriorityHigh, 0, 128);
+	 /* definition and creation of timerTask */
+  osThreadStaticDef(timerTask, StartTimerTask, osPriorityHigh, 0, 128, timerTaskBuffer, &timerTaskControlBlock);
   timerTaskHandle = osThreadCreate(osThread(timerTask), NULL);
 #endif
 }
