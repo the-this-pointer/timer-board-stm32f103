@@ -152,25 +152,25 @@
         <Bp>
           <Number>0</Number>
           <Type>0</Type>
-          <LineNumber>118</LineNumber>
+          <LineNumber>1541</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134235968</Address>
+          <Address>0</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
-          <Filename>..\Core\Src\Timer.c</Filename>
+          <BreakIfRCount>0</BreakIfRCount>
+          <Filename>..\Core\Src\UserInterface.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\TimerFirmwareRTOS\../Core/Src/Timer.c\118</Expression>
+          <Expression></Expression>
         </Bp>
         <Bp>
           <Number>1</Number>
           <Type>0</Type>
-          <LineNumber>639</LineNumber>
+          <LineNumber>535</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134234554</Address>
+          <Address>134233820</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
@@ -179,47 +179,42 @@
           <BreakIfRCount>1</BreakIfRCount>
           <Filename>..\Core\Src\UserInterface.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\639</Expression>
+          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\535</Expression>
         </Bp>
         <Bp>
           <Number>2</Number>
           <Type>0</Type>
-          <LineNumber>84</LineNumber>
+          <LineNumber>534</LineNumber>
           <EnabledFlag>1</EnabledFlag>
-          <Address>134238214</Address>
+          <Address>0</Address>
           <ByteObject>0</ByteObject>
           <HtxType>0</HtxType>
           <ManyObjects>0</ManyObjects>
           <SizeOfObject>0</SizeOfObject>
           <BreakByAccess>0</BreakByAccess>
-          <BreakIfRCount>1</BreakIfRCount>
+          <BreakIfRCount>0</BreakIfRCount>
           <Filename>..\Core\Src\UserInterface.c</Filename>
           <ExecCommand></ExecCommand>
-          <Expression>\\TimerFirmwareRTOS\../Core/Src/UserInterface.c\84</Expression>
+          <Expression></Expression>
         </Bp>
       </Breakpoint>
       <WatchWindow1>
         <Ww>
           <count>0</count>
           <WinNumber>1</WinNumber>
-          <ItemText>sTime</ItemText>
+          <ItemText>g_uart_rx</ItemText>
         </Ww>
         <Ww>
           <count>1</count>
           <WinNumber>1</WinNumber>
-          <ItemText>sDate</ItemText>
-        </Ww>
-        <Ww>
-          <count>2</count>
-          <WinNumber>1</WinNumber>
-          <ItemText>setTimeData</ItemText>
+          <ItemText>data[3]</ItemText>
         </Ww>
       </WatchWindow1>
       <MemoryWindow1>
         <Mm>
           <WinNumber>1</WinNumber>
           <SubType>8</SubType>
-          <ItemText>0x2000083C</ItemText>
+          <ItemText>0x20000a87</ItemText>
           <AccSizeX>0</AccSizeX>
         </Mm>
       </MemoryWindow1>
@@ -805,7 +800,7 @@
 
   <Group>
     <GroupName>Application/User/Core_HDR</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>

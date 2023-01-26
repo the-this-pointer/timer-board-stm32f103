@@ -137,10 +137,29 @@ void setSleepTimePageOnInitCallback(void* uih);
 uint8_t setSleepTimePageUpdateCallback(void* uih, uint32_t since);
 void setSleepTimePageInputCallback(void* uih, enum ActionType action);
 /* Send Times */
+typedef enum send_times_state {
+	Init,
+	CompatCheck,
+	Halt,
+	Clr,
+	SendTime,
+	Save,
+	Start,
+	Success,
+	Cancel,
+	ErrorOffset,	// marker for error values
+	CompatError,
+	HaltError,
+	ClrError,
+	SendTimeError,
+	SaveError,
+	StartError,
+} SendTimesState;
 typedef struct send_times_data {
-	uint8_t canceled;
+	SendTimesState state;
 } SendTimesPageData;
 void sendTimesPageOnInitCallback(void* uih);
+void sendTimesPageOnLeaveCallback(void* uih);
 uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since);
 void sendTimesPageInputCallback(void* uih, enum ActionType action);
 /* Message Popup */

@@ -472,13 +472,12 @@ void UserInterface_InitPages(UiHandle* uih)
 	/* Init Send Times Page And Data */
 
 	SendTimesPageData* sendTimesData = malloc(sizeof(sendTimesData));
-	sendTimesData->canceled = 0;
 
 	uih->pages[SendTimesPageIdx].text = NULL;
-	uih->pages[SendTimesPageIdx].actionIcons = "%('!";
+	uih->pages[SendTimesPageIdx].actionIcons = "%   ";
 	uih->pages[SendTimesPageIdx].onInit = sendTimesPageOnInitCallback;
 	uih->pages[SendTimesPageIdx].onUpdate = sendTimesPageUpdateCallback;
-	uih->pages[SendTimesPageIdx].onLeave = NULL;
+	uih->pages[SendTimesPageIdx].onLeave = sendTimesPageOnLeaveCallback;
 	uih->pages[SendTimesPageIdx].onHandleInput = sendTimesPageInputCallback;
 	uih->pages[SendTimesPageIdx].data = sendTimesData;
 
@@ -1383,24 +1382,133 @@ void sendTimesPageOnInitCallback(void* uih)
 	UiHandle* hnd = uih;
 	SendTimesPageData* data = hnd->currentPage->data;
 	
-	data->canceled = 0x00;
+	data->state = Init;
+}
+
+void sendTimesPageOnLeaveCallback(void* uih)
+{
 }
 
 uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 {
 	if (since < 400)
 		return 0;
+	
+	UiHandle* hnd = uih;
+	SendTimesPageData* data = hnd->currentPage->data;
 
 	/**
 	* Sending time to other devices has this steps:
+	* 0 . if we have dma/uart enabled, disable that (init page callback)
 	* 1.cmp;
 	* 2.hlt;
 	* 3.clr;
 	* 4.multiple dta; s...
 	* 5.set;
 	* 6.stt;
+	* 7 . re-enable dma/uart if we had it (leave page callback)
 	* In every step, there is a change of rejection in receiver side which will fail the remaining process.
 	*/
+	
+	char buff[32];
+	uint8_t cmdRes = 0x00;	// non-zero value means error occured
+	if (data->state < ErrorOffset)
+	{
+		if (data->state != Cancel && data->state != Success)
+			data->state++;
+		
+		switch (data->state)
+		{
+			case Init:
+			case CompatCheck:
+			{
+				char cmdData[3] = {MAX_PLANS, MAX_TIMES_PER_PLAN, UART_BUFF_SIZE};
+				cmdRes = sendUartCommand("cmp:", cmdData, 3);
+				break;
+			}
+			case Halt:
+				cmdRes = sendUartCommand("hlt;", NULL, 0);
+				break;
+			case Clr:
+				cmdRes = sendUartCommand("clr;", NULL, 0);
+				break;
+			case SendTime:
+				break;
+			case Save:
+				cmdRes = sendUartCommand("set;", NULL, 0);
+				break;
+			case Start:
+				cmdRes = sendUartCommand("stt;", NULL, 0);
+				break;
+			case Success:
+				break;
+			case Cancel:
+				break;
+			default:
+				break;
+		}
+		
+		if (cmdRes)
+			data->state += ErrorOffset;			
+	}
+	
+		switch (data->state)
+		{
+			case Init:
+			case CompatCheck:
+				strcpy(buff, "Checking compat");
+				break;
+			case Halt:
+				strcpy(buff, "Halting device");
+				break;
+			case Clr:
+				strcpy(buff, "Clearing");
+				break;
+			case SendTime:
+				strcpy(buff, "Sending");
+				break;
+			case Save:
+				strcpy(buff, "Saving");
+				break;
+			case Start:
+				strcpy(buff, "Starting");
+				break;
+			case Success:
+				strcpy(buff, "Success!");
+				break;
+			case Cancel:
+				strcpy(buff, "Cancelled!");
+				break;
+			case ErrorOffset:
+				strcpy(buff, "[Error]");
+				break;
+			case CompatError:
+				strcpy(buff, "Not compatible!");
+				break;
+			case HaltError:
+				strcpy(buff, "Halt error!");
+				break;
+			case ClrError:
+				strcpy(buff, "Clear error!");
+				break;
+			case SendTimeError:
+				strcpy(buff, "Send error!");
+				break;
+			case SaveError:
+				strcpy(buff, "Save error!");
+				break;
+			case StartError:
+				strcpy(buff, "Start error!");
+				break;
+			default:
+				break;
+		}
+	
+	ssd1306_SetCursor(5, 5);
+	ssd1306_WriteString(buff, Font_11x18, White);
+
+	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	SCR_DIRTY_ARG(hnd);
 }
 
 void sendTimesPageInputCallback(void* uih, enum ActionType action)
@@ -1411,9 +1519,10 @@ void sendTimesPageInputCallback(void* uih, enum ActionType action)
 	switch(action)
 	{
 		case Key1:
-			data->canceled = 0x01;
-			// handle returning to settings after proper cancellation
-			// UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			if (data->state > ErrorOffset || data->state == Cancel || data->state == Success)
+				UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
+			else if (data->state != Cancel)
+				data->state = Cancel;
 			break;
 		case Key2:
 			break;
@@ -1475,7 +1584,9 @@ uint8_t sendUartCommand(const char* cmd, void* data, uint8_t length)
 	if (data != NULL && length > 0)
 		HAL_UART_Transmit(&huart1, (uint8_t*)data, length, 100);
 	// wait for response from receiver
-	HAL_UART_Receive(&huart1, buff, 4, 1000);
+	HAL_StatusTypeDef cmdRes = HAL_UART_Receive(&huart1, buff, 4, 1000);
+	if (cmdRes != HAL_OK || strlen((const char *)buff) < 4)
+		return 0x01;
 	return memcmp(buff, "ack;", 4);
 }
 
@@ -1522,6 +1633,9 @@ void processUartCommand(const char* data, uint8_t length)
 	else if (memcmp(data, "clr;", 4) == 0)
 	{
 		// clear all items
+		timeListData.maxPlans = 0;
+		timeListData.maxTimePerPlan = 0;
+
 		Timer_TimeListInit(timeList);
 		handled = 0x01;
 	}
@@ -1535,11 +1649,11 @@ void processUartCommand(const char* data, uint8_t length)
 	{
 		// check if we have compatibility with setter device
 		uint8_t maxPlans, maxTimesPerPlan, uartBuffSize;
-		maxPlans = data[5];
-		maxTimesPerPlan = data[6];
-		uartBuffSize = data[7];
+		maxPlans = data[4];
+		maxTimesPerPlan = data[5];
+		uartBuffSize = data[6];
 
-		if (uartBuffSize != UART_BUFF_SIZE || maxPlans != MAX_PLANS || maxTimesPerPlan == MAX_TIMES_PER_PLAN)
+		if (uartBuffSize <= UART_BUFF_SIZE || maxPlans != MAX_PLANS || maxTimesPerPlan == MAX_TIMES_PER_PLAN)
 			goto send_response;
 		
 		handled = 0x01;
@@ -1549,8 +1663,8 @@ void processUartCommand(const char* data, uint8_t length)
 		// chunk of data received
 		
 		uint8_t offset, len;
-		offset = data[5];
-		len = data[6];
+		offset = data[4];
+		len = data[5];
 		if (len >= length)
 			goto send_response;
 		memcpy(&timeListData + offset, data + 6, len);
