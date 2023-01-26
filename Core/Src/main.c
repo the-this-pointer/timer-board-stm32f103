@@ -100,9 +100,8 @@ int main(void)
   MX_DMA_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  UserInterface_Init();
   Timer_Init();
-	HAL_UART_Transmit(&huart1, (uint8_t*)"Hi from Timer!", strlen("Hi from Timer!"), 100);
+	UserInterface_Init();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
