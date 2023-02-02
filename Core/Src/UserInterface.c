@@ -1449,6 +1449,7 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 				cmdRes = sendUartCommand("clr;", NULL, 0);
 				break;
 			case SendTime:
+				cmdRes = sendUartCommandChunked("dta:", &timeListData, sizeof(EEPROM_TimeList));
 				break;
 			case Save:
 				cmdRes = sendUartCommand("set;", NULL, 0);
