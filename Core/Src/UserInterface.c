@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define UART_BUFF_SIZE	128
+#define UART_CMD_WAIT		15000
 #define UART_START_PACKET   0x1B
 #define UART_START_PACKET_2 0x1B
 
@@ -29,6 +30,10 @@ osStaticThreadDef_t inputTaskControlBlock;
 osThreadId uiTaskHandle;
 uint32_t uiTaskBuffer[ 128 ];
 osStaticThreadDef_t uiTaskControlBlock;
+
+osThreadId uartTaskHandle;
+uint32_t uartTaskBuffer[ 128 ];
+osStaticThreadDef_t uartTaskControlBlock;
 
 osMessageQId inputQueueHandle;
 uint8_t inputQueueBuffer[ 10 * sizeof( uint16_t ) ];
@@ -93,6 +98,9 @@ void UserInterface_Init()
 
 	osThreadStaticDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128, uiTaskBuffer, &uiTaskControlBlock);
   uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
+
+	osThreadStaticDef(uartTask, StartUartTask, osPriorityNormal, 0, 128, uartTaskBuffer, &uartTaskControlBlock);
+  uartTaskHandle = osThreadCreate(osThread(uartTask), NULL);
 
 	UserInterface_InitPages(&uih);
 	
@@ -520,62 +528,8 @@ void StartInputTask(void const * argument)
 	uint16_t counter = 0;
 	uint16_t value = 0;
 	uint8_t dataAvailable = 0;
-	uint8_t rxDataCount = 0;
   for(;;)
-  {
-		// reading settings from uart
-		/**
-		* packet is something like:
-		* byte 0..1: packet start bytes (hardcoded values)
-		* byte 2: packet size [limited by 8-bits minus start packets and size bytes (3)], more than this limit will be ignored!
-		*/
-
-		rxDataCount = UART_BUFF_SIZE - huart1.hdmarx->Instance->CNDTR;
-		if (rxDataCount > 3 && g_uart_rx[0] == UART_START_PACKET && g_uart_rx[1] == UART_START_PACKET_2)
-		{
-			uint8_t resetDma = 0x00;
-			uint8_t packetSize = g_uart_rx[2];
-			if (packetSize > rxDataCount - 3)
-			{
-				// the whole packet not received yet, or maybe maximmum bytes received by dma!
-				if (rxDataCount == UART_BUFF_SIZE)
-				{
-					// packet is larger than the buffer and we are unable to get the rest of data, just ignore data and start over
-					resetDma = 0x01;
-				}
-				/**
-				*else
-				*{
-				*	wait for the rest of data
-				*}
-				*/
-			}
-			else
-			{
-				resetDma = 0x01;
-				processUartCommand((const char*)(g_uart_rx + 3), rxDataCount - 3);
-			}
-			
-			if (resetDma)
-			{
-				HAL_UART_DMAStop(&huart1);
-				HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
-				resetDma = 0x00;
-			}
-			
-			vTaskDelay( 1 );
-			continue;
-		}
-		else if (rxDataCount > 3 && (g_uart_rx[0] != UART_START_PACKET || g_uart_rx[1] != UART_START_PACKET_2))
-		{
-			// if we get garbage, just ignore received data.
-			HAL_UART_DMAStop(&huart1);
-			HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
-		}
-		
-		// end reading settings from uart
-		
-		
+  {		
 		if (counter > 35)
 			counter = 35;
 		
@@ -644,11 +598,70 @@ void StartUiTask(void const * argument)
   /* USER CODE END StartUiTask */
 }
 
+void StartUartTask(void const * argument)
+{
+	uint8_t rxDataCount = 0;
+  for(;;)
+  {
+		// reading settings from uart
+		/**
+		* packet is something like:
+		* byte 0..1: packet start bytes (hardcoded values)
+		* byte 2: packet size [limited by 8-bits minus start packets and size bytes (3)], more than this limit will be ignored!
+		*/
+
+		rxDataCount = UART_BUFF_SIZE - huart1.hdmarx->Instance->CNDTR;
+		if (rxDataCount > 3 && g_uart_rx[0] == UART_START_PACKET && g_uart_rx[1] == UART_START_PACKET_2)
+		{
+			uint8_t resetDma = 0x00;
+			uint8_t packetSize = g_uart_rx[2];
+			if (packetSize > rxDataCount - 3)
+			{
+				// the whole packet not received yet, or maybe maximmum bytes received by dma!
+				if (rxDataCount == UART_BUFF_SIZE)
+				{
+					// packet is larger than the buffer and we are unable to get the rest of data, just ignore data and start over
+					resetDma = 0x01;
+				}
+				/**
+				*else
+				*{
+				*	wait for the rest of data
+				*}
+				*/
+			}
+			else
+			{
+				resetDma = 0x01;
+				processUartCommand((const char*)(g_uart_rx + 3), rxDataCount - 3);
+			}
+			
+			if (resetDma)
+			{
+				HAL_UART_DMAStop(&huart1);
+				HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+				resetDma = 0x00;
+			}
+		}
+		else if (rxDataCount > 3 && (g_uart_rx[0] != UART_START_PACKET || g_uart_rx[1] != UART_START_PACKET_2))
+		{
+			// if we get garbage, just ignore received data.
+			HAL_UART_DMAStop(&huart1);
+			HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+		}
+		
+		vTaskDelay( 50 );
+	}
+}
+
 void SleepTimerCallback(void const * argument)
 {
-  /* USER CODE BEGIN SleepTimerCallback */
+	if (uih.currentPage == &uih.pages[SendTimesPageIdx])
+	{
+		xTimerReset(sleepTimerHandle, 100);
+		return;
+	}
 	UserInterface_TurnOffScreen(&uih);
-  /* USER CODE END SleepTimerCallback */
 }
 
 
@@ -1383,10 +1396,16 @@ void sendTimesPageOnInitCallback(void* uih)
 	SendTimesPageData* data = hnd->currentPage->data;
 	
 	data->state = Init;
+	
+	vTaskSuspend(inputTaskHandle);
+	vTaskSuspend(uartTaskHandle);
+	HAL_UART_DMAStop(&huart1);
 }
 
 void sendTimesPageOnLeaveCallback(void* uih)
 {
+	HAL_UART_Receive_DMA(&huart1, g_uart_rx, UART_BUFF_SIZE);
+	vTaskResume(uartTaskHandle);
 }
 
 uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
@@ -1412,10 +1431,40 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 	
 	char buff[32];
 	uint8_t cmdRes = 0x00;	// non-zero value means error occured
-	if (data->state < ErrorOffset)
+	if (data->state < ErrorOffset && data->state != Cancel && data->state != Success)
 	{
-		if (data->state != Cancel && data->state != Success)
-			data->state++;
+		data->state++;
+		
+		switch (data->state)
+		{
+			case Init:
+			case CompatCheck:
+				strcpy(buff, "Check. compat");
+				break;
+			case Halt:
+				strcpy(buff, "Halt. device");
+				break;
+			case Clr:
+				strcpy(buff, "Clearing");
+				break;
+			case SendTime:
+				strcpy(buff, "Sending");
+				break;
+			case Save:
+				strcpy(buff, "Saving");
+				break;
+			case Start:
+				strcpy(buff, "Starting");
+				break;
+			default:
+				break;
+		}
+		ssd1306_Fill(Black);
+		ssd1306_SetCursor(5, 5);
+		ssd1306_WriteString(buff, Font_11x18, White);
+		// force show message
+		ssd1306_UpdateScreen(&hi2c1);
+		osDelay(1);
 		
 		switch (data->state)
 		{
@@ -1454,25 +1503,6 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 	
 		switch (data->state)
 		{
-			case Init:
-			case CompatCheck:
-				strcpy(buff, "Checking compat");
-				break;
-			case Halt:
-				strcpy(buff, "Halting device");
-				break;
-			case Clr:
-				strcpy(buff, "Clearing");
-				break;
-			case SendTime:
-				strcpy(buff, "Sending");
-				break;
-			case Save:
-				strcpy(buff, "Saving");
-				break;
-			case Start:
-				strcpy(buff, "Starting");
-				break;
 			case Success:
 				strcpy(buff, "Success!");
 				break;
@@ -1483,7 +1513,7 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 				strcpy(buff, "[Error]");
 				break;
 			case CompatError:
-				strcpy(buff, "Not compatible!");
+				strcpy(buff, "Compat error!");
 				break;
 			case HaltError:
 				strcpy(buff, "Halt error!");
@@ -1503,11 +1533,17 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 			default:
 				break;
 		}
-	
+		
+	ssd1306_Fill(Black);
 	ssd1306_SetCursor(5, 5);
 	ssd1306_WriteString(buff, Font_11x18, White);
 
-	UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	if (data->state >= Success)
+	{
+		vTaskResume(inputTaskHandle);
+		UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
+	}
+		
 	SCR_DIRTY_ARG(hnd);
 }
 
@@ -1521,8 +1557,8 @@ void sendTimesPageInputCallback(void* uih, enum ActionType action)
 		case Key1:
 			if (data->state > ErrorOffset || data->state == Cancel || data->state == Success)
 				UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
-			else if (data->state != Cancel)
-				data->state = Cancel;
+			/*else if (data->state != Cancel)
+				data->state = Cancel;*/
 			break;
 		case Key2:
 			break;
@@ -1584,7 +1620,7 @@ uint8_t sendUartCommand(const char* cmd, void* data, uint8_t length)
 	if (data != NULL && length > 0)
 		HAL_UART_Transmit(&huart1, (uint8_t*)data, length, 100);
 	// wait for response from receiver
-	HAL_StatusTypeDef cmdRes = HAL_UART_Receive(&huart1, buff, 4, 1000);
+	HAL_StatusTypeDef cmdRes = HAL_UART_Receive(&huart1, buff, 4, UART_CMD_WAIT);
 	if (cmdRes != HAL_OK || strlen((const char *)buff) < 4)
 		return 0x01;
 	return memcmp(buff, "ack;", 4);
@@ -1618,7 +1654,12 @@ void processUartCommand(const char* data, uint8_t length)
 		return;
 	
 	uint8_t handled = 0x00;
-	if (memcmp(data, "hlt;", 4) == 0)
+	if (memcmp(data, "png;", 4) == 0)
+	{
+		// ping the device
+		handled = 0x01;
+	}
+	else if (memcmp(data, "hlt;", 4) == 0)
 	{
 		// stop timer task (but outputs stay active with last values)
 		g_timerEnabled = 0x00;
@@ -1653,7 +1694,7 @@ void processUartCommand(const char* data, uint8_t length)
 		maxTimesPerPlan = data[5];
 		uartBuffSize = data[6];
 
-		if (uartBuffSize <= UART_BUFF_SIZE || maxPlans != MAX_PLANS || maxTimesPerPlan == MAX_TIMES_PER_PLAN)
+		if (uartBuffSize > UART_BUFF_SIZE || maxPlans != MAX_PLANS || maxTimesPerPlan == MAX_TIMES_PER_PLAN)
 			goto send_response;
 		
 		handled = 0x01;

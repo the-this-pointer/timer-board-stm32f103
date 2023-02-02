@@ -67,6 +67,7 @@ void UserInterface_p_DrawActions(const char* actions);
 
 // Tasks
 void StartInputTask(void const * argument);
+void StartUartTask(void const * argument);
 void StartUiTask(void const * argument);
 void SleepTimerCallback(void const * argument);
 
