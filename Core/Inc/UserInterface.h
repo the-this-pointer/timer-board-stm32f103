@@ -64,9 +64,9 @@ uint8_t UserInterface_ScreenIsOn(UiHandle* uih);
 void UserInterface_p_DrawMenu(UiHandle* uih);
 void UserInterface_p_onHandleMenuInput(UiHandle* uih, enum ActionType action);
 void UserInterface_p_DrawActions(const char* actions);
+uint16_t UserInterface_p_HandleInputs();
 
 // Tasks
-void StartInputTask(void const * argument);
 void StartUartTask(void const * argument);
 void StartUiTask(void const * argument);
 void SleepTimerCallback(void const * argument);

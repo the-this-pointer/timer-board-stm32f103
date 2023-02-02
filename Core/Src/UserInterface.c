@@ -23,10 +23,6 @@ extern uint8_t g_timerEnabled;
 
 uint16_t sleepTimeMSec;
 
-osThreadId inputTaskHandle;
-uint32_t inputTaskBuffer[ 128 ];
-osStaticThreadDef_t inputTaskControlBlock;
-
 osThreadId uiTaskHandle;
 uint32_t uiTaskBuffer[ 128 ];
 osStaticThreadDef_t uiTaskControlBlock;
@@ -34,10 +30,6 @@ osStaticThreadDef_t uiTaskControlBlock;
 osThreadId uartTaskHandle;
 uint32_t uartTaskBuffer[ 128 ];
 osStaticThreadDef_t uartTaskControlBlock;
-
-osMessageQId inputQueueHandle;
-uint8_t inputQueueBuffer[ 10 * sizeof( uint16_t ) ];
-osStaticMessageQDef_t inputQueueControlBlock;
 
 osTimerId sleepTimerHandle;
 osStaticTimerDef_t sleepTimerControlBlock;
@@ -88,13 +80,6 @@ void UserInterface_Init()
   sleepTimerHandle = osTimerCreate(osTimer(sleepTimer), osTimerOnce, NULL);
 	xTimerChangePeriod(sleepTimerHandle, sleepTimeMSec / portTICK_PERIOD_MS, 100);
 	xTimerStart(sleepTimerHandle, 100);
-
-	// Input Queue
-	osMessageQStaticDef(inputQueue, 16, uint16_t, inputQueueBuffer, &inputQueueControlBlock);
-  inputQueueHandle = osMessageCreate(osMessageQ(inputQueue), NULL);
-
-	osThreadStaticDef(inputTask, StartInputTask, osPriorityNormal, 0, 128, inputTaskBuffer, &inputTaskControlBlock);
-  inputTaskHandle = osThreadCreate(osThread(inputTask), NULL);
 
 	osThreadStaticDef(uiTask, StartUiTask, osPriorityBelowNormal, 0, 128, uiTaskBuffer, &uiTaskControlBlock);
   uiTaskHandle = osThreadCreate(osThread(uiTask), NULL);
@@ -520,19 +505,12 @@ void UserInterface_ShowPopup(UiHandle* uih, const char* text, uint8_t secondsToS
 	UserInterface_ChangePage(uih, &uih->pages[MessagePopupIdx]);
 }
 
-void StartInputTask(void const * argument)
+uint16_t UserInterface_p_HandleInputs()
 {
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
 	BaseType_t xResult;
-	uint16_t counter = 0;
 	uint16_t value = 0;
 	uint8_t dataAvailable = 0;
-  for(;;)
-  {		
-		if (counter > 35)
-			counter = 35;
-		
+  
 		if (HAL_GPIO_ReadPin(Key1_GPIO_Port, Key1_Pin) == GPIO_PIN_SET) {
 			value = Key1_Pin;
 			dataAvailable = 1;
@@ -549,32 +527,23 @@ void StartInputTask(void const * argument)
 			value = Key4_Pin;
 			dataAvailable = 1;
 		}
-		else if (counter > 0) {
-			counter = 0;
-		}
-		
+
 		if (dataAvailable)
 		{
+			xTimerReset(sleepTimerHandle, 100);
+			vTaskDelay( pdMS_TO_TICKS(50) );
 			if (!UserInterface_ScreenIsOn(&uih))
 				UserInterface_TurnOnScreen(&uih);
 			else
 			{
-				xResult = xQueueSendToBack(inputQueueHandle, (const void *)&value, pdMS_TO_TICKS(50));
-				counter += 5;
+				return value;
 			}
-			xTimerReset(sleepTimerHandle, 100);
-			dataAvailable = 0;
-			vTaskDelay(pdMS_TO_TICKS(400 - counter * 10));
 		}
-
-    vTaskDelay( 100 );
-  }
-  /* USER CODE END 5 */
+		return 0;
 }
 
 void StartUiTask(void const * argument)
 {
-  /* USER CODE BEGIN StartUiTask */
   /* Infinite loop */
 	TickType_t xLastUpdateTime = xTaskGetTickCount();
 	TickType_t xNow = xTaskGetTickCount();
@@ -582,8 +551,8 @@ void StartUiTask(void const * argument)
 	BaseType_t xResult;
 	for(;;)
   {
-    xResult = xQueueReceive(inputQueueHandle, &xReceivedInput, pdMS_TO_TICKS(5) );
-		if( xResult == pdPASS )
+    xReceivedInput = UserInterface_p_HandleInputs();
+		if( xReceivedInput > 0 )
 		{
 			UserInterface_HandleInput(&uih, xReceivedInput);
 		}
@@ -595,7 +564,6 @@ void StartUiTask(void const * argument)
 		UserInterface_Flush(&uih);
     vTaskDelay( 100 );
   }
-  /* USER CODE END StartUiTask */
 }
 
 void StartUartTask(void const * argument)
@@ -1397,7 +1365,6 @@ void sendTimesPageOnInitCallback(void* uih)
 	
 	data->state = Init;
 	
-	vTaskSuspend(inputTaskHandle);
 	vTaskSuspend(uartTaskHandle);
 	HAL_UART_DMAStop(&huart1);
 }
@@ -1540,7 +1507,6 @@ uint8_t sendTimesPageUpdateCallback(void* uih, uint32_t since)
 
 	if (data->state >= Success)
 	{
-		vTaskResume(inputTaskHandle);
 		UserInterface_p_DrawActions(hnd->currentPage->actionIcons);
 	}
 		
@@ -1557,8 +1523,8 @@ void sendTimesPageInputCallback(void* uih, enum ActionType action)
 		case Key1:
 			if (data->state > ErrorOffset || data->state == Cancel || data->state == Success)
 				UserInterface_ChangePage(uih, &((UiHandle*)uih)->pages[SettingPageIdx]);
-			/*else if (data->state != Cancel)
-				data->state = Cancel;*/
+			else if (data->state != Cancel)
+				data->state = Cancel;
 			break;
 		case Key2:
 			break;
