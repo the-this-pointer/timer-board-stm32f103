@@ -9,13 +9,11 @@ I use the <a href="https://github.com/4ilo/ssd1306-stm32HAL" target="_blank">ssd
 You can access the KiCAD PCB design files <a href="https://github.com/the-this-pointer/timer-board-stm32f103-hw-2" target="_blank">here</a>.
 
 #### Images:
-Main screen:
+
 ![Main Screen](images/1683184317988_2.jpg)
 
-Time list screen:
 ![Time List](images/1683184317978_2.jpg)
 
-Time setting screen:
 ![Time Setting](images/1683184317955_2.jpg)
 
 #### Todo:
